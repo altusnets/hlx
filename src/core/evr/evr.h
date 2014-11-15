@@ -76,12 +76,11 @@ public:
                 m_epoll_fd(-1)
         {};
         virtual ~evr() {};
-        virtual int wait_events(epoll_event* a_ev, int a_max_events, int a_timeout_msec) = 0;
-        virtual int add_out(int a_fd, void* a_data) = 0;
-        virtual int add_in(int a_fd, void* a_data) = 0;
-        virtual int add_in_only(int a_fd, void* a_data) = 0;
-        virtual void forget(int a_fd, void* a_data) = 0;
-        virtual int raw_set(int a_op, int a_fd, uint32_t a_events, void *a_data) = 0;
+
+        virtual int wait(epoll_event* a_ev, int a_max_events, int a_timeout_msec) = 0;
+        virtual int add(int a_fd, uint32_t a_attr_mask, void* a_data) = 0;
+        virtual int mod(int a_fd, uint32_t a_attr_mask, void* a_data) = 0;
+        virtual int del(int a_fd) = 0;
 
 private:
         int m_epoll_fd;
@@ -169,11 +168,9 @@ public:
         // -------------------------------------------
         // File events...
         // -------------------------------------------
-        // add_file_event
-        int32_t add_file(int a_fd, uint32_t a_file_attr_mask, void *a_data);
-
-        // remove_file_event
-        int32_t remove_file(int a_fd, uint32_t a_file_attr_mask);
+        int32_t add_fd(int a_fd, uint32_t a_attr_mask, void *a_data);
+        int32_t mod_fd(int a_fd, uint32_t a_attr_mask, void *a_data);
+        int32_t del_fd(int a_fd);
 
         uint64_t get_pq_size(void) { return m_timer_pq.size();};
 
@@ -184,9 +181,7 @@ public:
         int32_t cancel_timer(void **a_timer);
         int32_t stop(void);
 
-        evr *get_evr(void) {return m_evr;};
 private:
-
         evr_loop(const evr_loop&);
         evr_loop& operator=(const evr_loop&);
 

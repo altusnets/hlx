@@ -136,6 +136,7 @@ public:
         void get_stats_copy(tag_stat_map_t &ao_tag_stat_map);
         int32_t add_url(std::string &a_url);
         int32_t add_url_file(std::string &a_url_file);
+        uint32_t get_timeout_s(void) { return m_timeout_s;};
 
         bool is_done(void) const
         {

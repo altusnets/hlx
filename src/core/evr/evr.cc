@@ -190,7 +190,7 @@ int32_t evr_loop::run(void)
         int l_num_events = 0;
 
         //NDBG_PRINT("%sWAIT4_CONNECTIONS%s: l_num_events = %d\n", ANSI_COLOR_FG_RED, ANSI_COLOR_OFF, l_num_events);
-        l_num_events = m_evr->wait_events(m_epoll_event_vector, m_max_connections, l_time_diff_ms);
+        l_num_events = m_evr->wait(m_epoll_event_vector, m_max_connections, l_time_diff_ms);
         //NDBG_PRINT("%sSTART_CONNECTIONS%s: l_num_events = %d\n", ANSI_COLOR_FG_MAGENTA, ANSI_COLOR_OFF, l_num_events);
 
         // -------------------------------------------
@@ -243,28 +243,10 @@ int32_t evr_loop::run(void)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t evr_loop::add_file(int a_fd, uint32_t a_file_attr_mask, void *a_data)
+int32_t evr_loop::add_fd(int a_fd, uint32_t a_attr_mask, void *a_data)
 {
-
         int l_status;
-        // -------------------------------------------
-        // TODO FIX!!!!!!!!!
-        // -------------------------------------------
-#if 0
-        EVR_FILE_ATTR_MASK_READ = 1 << 0,
-        EVR_FILE_ATTR_MASK_WRITE = 1 << 1,
-        EVR_FILE_ATTR_MASK_ERROR = 1 << 2
-#endif
-        if(a_file_attr_mask & EVR_FILE_ATTR_MASK_WRITE)
-        {
-                l_status = m_evr->add_out(a_fd, a_data);
-        }
-        else
-        {
-                l_status = m_evr->add_in(a_fd, a_data);
-        }
-
-
+        l_status = m_evr->add(a_fd, a_attr_mask, a_data);
         return l_status;
 }
 
@@ -273,16 +255,25 @@ int32_t evr_loop::add_file(int a_fd, uint32_t a_file_attr_mask, void *a_data)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t evr_loop::remove_file(int a_fd, uint32_t a_file_attr_mask)
+int32_t evr_loop::mod_fd(int a_fd, uint32_t a_attr_mask, void *a_data)
 {
-
-        // -------------------------------------------
-        // TODO FIX!!!!!!!!!
-        // -------------------------------------------
-        m_evr->forget(a_fd, NULL);
-
-        return STATUS_OK;
+        int l_status;
+        l_status = m_evr->mod(a_fd, a_attr_mask, a_data);
+        return l_status;
 }
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t evr_loop::del_fd(int a_fd)
+{
+        int l_status;
+        l_status = m_evr->del(a_fd);
+        return l_status;
+}
+
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
