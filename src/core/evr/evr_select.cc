@@ -152,6 +152,20 @@ int evr_select::add_in(int a_fd, void* a_data)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+int evr_select::add_in_only(int a_fd, void* a_data)
+{
+        int l_fd = a_fd;
+        FD_CLR(l_fd, &m_wfdset);
+        FD_SET(l_fd, &m_rfdset);
+
+        return 0;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
 void evr_select::forget(int a_fd, void* a_data)
 {
 
@@ -163,7 +177,15 @@ void evr_select::forget(int a_fd, void* a_data)
 	FD_CLR(a_fd, &m_wfdset);
 }
 
-
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int evr_select::raw_set(int a_op, int a_fd, uint32_t a_events, void *a_data)
+{
+        return 0;
+}
 
 
 

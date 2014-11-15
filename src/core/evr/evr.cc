@@ -31,6 +31,7 @@
 #include "util.h"
 
 #include <unistd.h>
+#include <sys/eventfd.h>
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -51,6 +52,7 @@ evr_loop::evr_loop(evr_file_cb_t a_read_cb,
         m_epoll_event_vector(NULL),
         m_stopped(false),
         m_evr(NULL),
+        m_control_fd(-1),
         m_read_cb(a_read_cb),
         m_write_cb(a_write_cb),
         m_error_cb(a_error_cb)
@@ -82,6 +84,22 @@ evr_loop::evr_loop(evr_file_cb_t a_read_cb,
         {
                 pthread_mutex_init(&m_timer_pq_mutex, NULL);
         }
+
+        // Create eventfd for yanking an existing epoll_wait
+        m_control_fd = eventfd(0, EFD_NONBLOCK);
+        if(m_control_fd == -1)
+        {
+                NDBG_PRINT("m_control_fd: %d\n", m_control_fd);
+        }
+
+        int32_t l_status = 0;
+        //l_status = m_evr->add_in_only(m_control_fd, NULL);
+        if(l_status != 0)
+        {
+                NDBG_PRINT("l_status: %d\n", l_status);
+        }
+        // Check for error???
+
 }
 
 //: ----------------------------------------------------------------------------
@@ -303,19 +321,41 @@ int32_t evr_loop::add_timer(uint64_t a_time_ms, evr_timer_cb_t a_timer_cb, void 
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t evr_loop::cancel_timer(void *a_timer)
+int32_t evr_loop::cancel_timer(void **a_timer)
 {
         // TODO synchronization???
-        if(a_timer)
+        if(*a_timer)
         {
-                evr_timer_event_t *l_timer_event = static_cast<evr_timer_event_t *>(a_timer);
+                evr_timer_event_t *l_timer_event = static_cast<evr_timer_event_t *>(*a_timer);
                 //printf("%sXXX%s: %p TIMER AT %24lu ms --> %24lu\n",ANSI_COLOR_FG_RED, ANSI_COLOR_OFF,a_timer,0,l_timer_event->m_time_ms);
                 //NDBG_PRINT_BT(0,"__");
                 l_timer_event->m_state = EVR_TIMER_CANCELLED;
+                *a_timer = NULL;
                 return STATUS_OK;
         }
         else
         {
                 return STATUS_ERROR;
         }
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t evr_loop::stop(void)
+{
+
+        // Wake up epoll_wait by writing to control fd
+        uint64_t l_value = 1;
+        ssize_t l_write_status = 0;
+        //NDBG_PRINT("WRITING\n");
+        l_write_status = write(m_control_fd, &l_value, sizeof (l_value));
+        if(l_write_status == -1)
+        {
+                NDBG_PRINT("l_write_status: %ld\n", l_write_status);
+        }
+
+        return STATUS_OK;
 }

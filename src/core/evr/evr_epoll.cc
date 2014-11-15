@@ -112,6 +112,26 @@ int evr_epoll::add_in(int a_fd, void* a_data)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+int evr_epoll::add_in_only(int a_fd, void* a_data)
+{
+
+        //NDBG_PRINT("%sADD_OUT%s: fd: %d\n", ANSI_COLOR_BG_BLUE, ANSI_COLOR_OFF, a_fd);
+        struct epoll_event ev;
+        ev.events = EPOLLET | EPOLLIN;
+        ev.data.ptr = a_data;
+        if (0 != epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, a_fd, &ev))
+        {
+                NDBG_PRINT("Error: epoll_fd[%d] EPOLL_CTL_ADD fd[%d] failed (%s)\n", m_epoll_fd, a_fd, strerror(errno));
+                return -1;
+        }
+        return 0;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
 void evr_epoll::forget(int a_fd, void* a_data)
 {
 
@@ -128,5 +148,24 @@ void evr_epoll::forget(int a_fd, void* a_data)
                         return;
                 }
         }
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int evr_epoll::raw_set(int a_op, int a_fd, uint32_t a_events, void *a_data)
+{
+        //NDBG_PRINT("%sADD_OUT%s: fd: %d\n", ANSI_COLOR_BG_BLUE, ANSI_COLOR_OFF, a_fd);
+        struct epoll_event ev;
+        ev.events = a_events;
+        ev.data.ptr = a_data;
+        if (0 != epoll_ctl(m_epoll_fd, a_op, a_fd, &ev))
+        {
+                NDBG_PRINT("Error: epoll_fd[%d] EPOLL_CTL_ADD fd[%d] failed (%s)\n", m_epoll_fd, a_fd, strerror(errno));
+                return -1;
+        }
+        return 0;
 }
 

@@ -128,6 +128,7 @@ t_client::t_client(bool a_verbose,
                                 m_sock_opt_send_buf_size,
                                 m_sock_opt_no_delay,
                                 false,
+                                true,
                                 m_max_reqs_per_conn,
                                 m_rand_ptr);
 
@@ -192,6 +193,12 @@ int t_client::run(void)
 //: ----------------------------------------------------------------------------
 void *t_client::evr_loop_file_writeable_cb(void *a_data)
 {
+
+        if(!a_data)
+        {
+                return NULL;
+        }
+
         nconn* l_nconn = static_cast<nconn*>(a_data);
         reqlet *l_reqlet = static_cast<reqlet *>(l_nconn->get_data1());
         t_client *l_t_client = g_t_client;
@@ -250,6 +257,12 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
 //: ----------------------------------------------------------------------------
 void *t_client::evr_loop_file_readable_cb(void *a_data)
 {
+
+        if(!a_data)
+        {
+                return NULL;
+        }
+
         nconn* l_nconn = static_cast<nconn*>(a_data);
         reqlet *l_reqlet = static_cast<reqlet *>(l_nconn->get_data1());
         t_client *l_t_client = g_t_client;
@@ -257,7 +270,7 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
         //NDBG_PRINT("%sREADABLE%s %p\n", ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF, l_nconn);
 
         // Cancel last timer
-        l_t_client->m_evr_loop->cancel_timer(l_nconn->m_timer_obj);
+        l_t_client->m_evr_loop->cancel_timer(&(l_nconn->m_timer_obj));
 
         switch (l_nconn->get_state())
         {
@@ -354,6 +367,11 @@ void *t_client::evr_loop_file_error_cb(void *a_data)
 //: ----------------------------------------------------------------------------
 void *t_client::evr_loop_file_timeout_cb(void *a_data)
 {
+
+        if(!a_data)
+        {
+                return NULL;
+        }
 
         nconn* l_nconn = static_cast<nconn*>(a_data);
         reqlet *l_reqlet = static_cast<reqlet *>(l_nconn->get_data1());
@@ -658,7 +676,7 @@ int32_t t_client::cleanup_connection(nconn *a_nconn, bool a_cancel_timer)
         // Cancel last timer
         if(a_cancel_timer)
         {
-                m_evr_loop->cancel_timer(a_nconn->m_timer_obj);
+                m_evr_loop->cancel_timer(&(a_nconn->m_timer_obj));
         }
         m_evr_loop->remove_file(a_nconn->get_fd(), 0);
         a_nconn->done_cb();

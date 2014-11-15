@@ -44,7 +44,9 @@ public:
         int wait_events(epoll_event* a_ev, int a_max_events, int a_timeout_msec);
         int add_out(int a_fd, void* a_data);
         int add_in(int a_fd, void* a_data);
+        int add_in_only(int a_fd, void* a_data);
         void forget(int a_fd, void* a_data);
+        int raw_set(int a_op, int a_fd, uint32_t a_events, void *a_data);
 
 private:
         DISALLOW_COPY_AND_ASSIGN(evr_select)
