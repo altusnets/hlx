@@ -130,7 +130,7 @@ public:
 
         int run(void);
         void *t_run(void *a_nothing);
-        void stop(void) { m_stopped = true; }
+        void stop(void);
         bool is_running(void) { return !m_stopped; }
         int32_t set_header(const std::string &a_header_key, const std::string &a_header_val);
         void get_stats_copy(tag_stat_map_t &ao_tag_stat_map);

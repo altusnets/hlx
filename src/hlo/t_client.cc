@@ -191,6 +191,22 @@ int t_client::run(void)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+void t_client::stop(void)
+{
+        m_stopped = true;
+        int32_t l_status;
+        l_status = m_evr_loop->stop();
+        if(l_status != STATUS_OK)
+        {
+                NDBG_PRINT("Error performing stop.\n");
+        }
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
 void *t_client::evr_loop_file_writeable_cb(void *a_data)
 {
 
