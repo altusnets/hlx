@@ -93,7 +93,7 @@ evr_loop::evr_loop(evr_file_cb_t a_read_cb,
         }
 
         int32_t l_status = 0;
-        //l_status = m_evr->add_in_only(m_control_fd, NULL);
+        l_status = m_evr->add(m_control_fd, EVR_FILE_ATTR_MASK_READ, NULL);
         if(l_status != 0)
         {
                 NDBG_PRINT("l_status: %d\n", l_status);
