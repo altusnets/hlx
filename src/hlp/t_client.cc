@@ -1037,23 +1037,6 @@ void t_client::show_stats(void)
                         m_stat_err_read_cb,
                         m_stat_err_error_cb
                         );
-
-#if 0
-        // Show connection info
-        for(rconn_pb_map_t::iterator i_rconn = m_rconn_pb_map.begin();
-                        i_rconn != m_rconn_pb_map.end();
-                        ++i_rconn)
-        {
-                nconn *l_conn = i_rconn->second->m_conn;
-                NDBG_OUTPUT("! %sCONN%s[%6d] Content-Length: %12" PRIu64 " TOTAL: %12u STATE: %d\n",
-                                ANSI_COLOR_FG_MAGENTA, ANSI_COLOR_OFF,
-                                l_conn->m_fd,
-                                l_conn->m_http_parser.content_length,
-                                l_conn->m_stat.m_total_bytes,
-                                l_conn->m_state
-                                );
-        }
-#endif
 }
 
 

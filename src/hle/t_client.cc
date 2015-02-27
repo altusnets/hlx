@@ -243,8 +243,6 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
         reqlet *l_reqlet = static_cast<reqlet *>(l_nconn->get_data1());
         t_client *l_t_client = g_t_client;
 
-        //NDBG_PRINT("%sREADABLE%s[%d] %p\n", ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF, l_nconn->m_fd, l_nconn);
-
         // Cancel last timer
         l_t_client->m_evr_loop->cancel_timer(&(l_nconn->m_timer_obj));
 
@@ -263,8 +261,8 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
         }
 
         // Check for done...
-        if((l_nconn->get_state() == nconn::CONN_STATE_DONE) ||
-                        (l_status == STATUS_ERROR))
+        if((l_nconn->is_done()) ||
+	   (l_status == STATUS_ERROR))
         {
                 if(l_status == STATUS_ERROR)
                 {
@@ -330,11 +328,10 @@ void *t_client::evr_loop_file_timeout_cb(void *a_data)
         //add_stat_to_agg(l_reqlet->m_stat_agg, l_nconn->get_stats());
         if(l_t_client->m_verbose)
         {
-                NDBG_PRINT("%sTIMING OUT CONN%s: i_conn: %lu HOST: %s LAST_STATE: %d THIS: %p\n",
+                NDBG_PRINT("%sTIMING OUT CONN%s: i_conn: %lu HOST: %s THIS: %p\n",
                                 ANSI_COLOR_BG_RED, ANSI_COLOR_OFF,
                                 l_nconn->get_id(),
                                 l_reqlet->m_url.m_host.c_str(),
-                                l_nconn->get_state(),
                                 l_t_client);
         }
 
@@ -438,7 +435,7 @@ int32_t t_client::start_connections(void)
         reqlet_repo *l_reqlet_repo = reqlet_repo::get();
         reqlet *l_reqlet = NULL;
 
-        // Find an empty connection slot.
+        // Find an empty client slot.
         //NDBG_PRINT("m_conn_free_list.size(): %Zu\n", m_conn_free_list.size());
         for (conn_id_list_t::iterator i_conn = m_conn_free_list.begin();
                (i_conn != m_conn_free_list.end()) &&
@@ -456,13 +453,13 @@ int32_t t_client::start_connections(void)
                         return STATUS_OK;
                 }
 
-                // Start connection for this reqlet
+                // Start client for this reqlet
                 //NDBG_PRINT("i_conn: %d\n", *i_conn);
                 nconn *l_nconn = m_nconn_vector[*i_conn];
                 // TODO Check for NULL
 
 
-                // Assign the reqlet for this connection
+                // Assign the reqlet for this client
                 l_nconn->set_data1(l_reqlet);
 
                 // Set scheme (mode HTTP/HTTPS)
@@ -486,8 +483,7 @@ int32_t t_client::start_connections(void)
                 //NDBG_PRINT("%sCONNECT%s: %s\n", ANSI_COLOR_BG_MAGENTA, ANSI_COLOR_OFF, l_reqlet->m_url.m_host.c_str());
                 l_nconn->set_host(l_reqlet->m_url.m_host);
                 l_status = l_nconn->run_state_machine(m_evr_loop, l_reqlet->m_host_info);
-                if((STATUS_OK != l_status) &&
-                                (l_nconn->get_state() != nconn::CONN_STATE_CONNECTING))
+                if(STATUS_OK != l_status)
                 {
                         NDBG_PRINT("Error: Performing do_connect\n");
                         T_CLIENT_CONN_CLEANUP(this, l_nconn, l_reqlet, 500, "Performing do_connect");
@@ -508,7 +504,7 @@ int32_t t_client::create_request(nconn &ao_conn,
                 reqlet &a_reqlet)
 {
 
-        // Get connection
+        // Get client
         char *l_req_buf = ao_conn.m_req_buf;
         uint32_t l_req_buf_len = 0;
         uint32_t l_max_buf_len = sizeof(ao_conn.m_req_buf);
@@ -585,9 +581,8 @@ int32_t t_client::cleanup_connection(nconn *a_nconn, bool a_cancel_timer)
         {
                 m_evr_loop->cancel_timer(&(a_nconn->m_timer_obj));
         }
-        m_evr_loop->del_fd(a_nconn->get_fd());
         a_nconn->reset_stats();
-        a_nconn->done_cb();
+        a_nconn->done_cb(m_evr_loop);
 
         // Add back to free list
         m_conn_free_list.push_back(l_conn_id);

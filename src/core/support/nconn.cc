@@ -640,7 +640,7 @@ int32_t nconn::send_request(bool is_reuse)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t nconn::read_cb(void)
+int32_t nconn::receive_response(void)
 {
 
         uint32_t l_total_bytes_read = 0;
@@ -775,7 +775,7 @@ int32_t nconn::read_cb(void)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t nconn::done_cb(void)
+int32_t nconn::done_cb(evr_loop *a_evr_loop)
 {
         // Shut down connection
         if (m_scheme == SCHEME_HTTP)
@@ -1089,11 +1089,11 @@ state_top:
         {
                 int l_read_status = 0;
                 //NDBG_PRINT("%sCNST_READING%s\n", ANSI_COLOR_BG_CYAN, ANSI_COLOR_OFF);
-                l_read_status = read_cb();
-                //NDBG_PRINT("%sCNST_READING%s: read_cb(): total: %d\n", ANSI_COLOR_BG_CYAN, ANSI_COLOR_OFF, (int)m_stat.m_total_bytes);
+                l_read_status = receive_response();
+                //NDBG_PRINT("%sCNST_READING%s: receive_response(): total: %d\n", ANSI_COLOR_BG_CYAN, ANSI_COLOR_OFF, (int)m_stat.m_total_bytes);
                 if(l_read_status < 0)
                 {
-                        NDBG_PRINT("Error: performing read_cb\n");
+                        NDBG_PRINT("Error: performing receive_response\n");
                         return STATUS_ERROR;
                 }
                 return l_read_status;

@@ -73,24 +73,6 @@ public:
 
         } scheme_t;
 
-        // ---------------------------------------
-        // Connection state
-        // ---------------------------------------
-        typedef enum conn_state
-        {
-                CONN_STATE_FREE = 0,
-                CONN_STATE_CONNECTING,
-
-                // SSL
-                CONN_STATE_SSL_CONNECTING,
-                CONN_STATE_SSL_CONNECTING_WANT_READ,
-                CONN_STATE_SSL_CONNECTING_WANT_WRITE,
-
-                CONN_STATE_CONNECTED,
-                CONN_STATE_READING,
-                CONN_STATE_DONE
-        } conn_state_t;
-
         nconn(bool a_verbose,
               bool a_color,
               uint32_t a_sock_opt_recv_buf_size,
@@ -153,8 +135,7 @@ public:
         void set_host(const std::string &a_host) {m_host = a_host;};
         int32_t run_state_machine(evr_loop *a_evr_loop, const host_info_t &a_host_info);
         int32_t send_request(bool is_reuse = false);
-        int32_t read_cb(void);
-        int32_t done_cb(void);
+        int32_t done_cb(evr_loop *a_evr_loop);
         bool can_reuse(void)
         {
                 //NDBG_PRINT("CONN[%u] num / max %ld / %ld \n", m_connection_id, m_num_reqs, m_max_reqs_per_conn);
@@ -172,11 +153,9 @@ public:
         void reset_stats(void);
         const req_stat_t &get_stats(void) const { return m_stat;};
         void set_scheme(scheme_t a_scheme) {m_scheme = a_scheme;};
-        conn_state_t get_state(void) { return m_state;}
-        int32_t get_fd(void) { return m_fd; }
+        bool is_done(void) { return (m_state == CONN_STATE_DONE);}
         void set_id(uint64_t a_id) {m_id = a_id;}
         uint64_t get_id(void) {return m_id;}
-
         void set_data1(void * a_data) {m_data1 = a_data;}
         void *get_data1(void) {return m_data1;}
 
@@ -198,10 +177,27 @@ public:
         char m_req_buf[MAX_REQ_BUF];
         uint32_t m_req_buf_len;
         void *m_timer_obj;
-        int m_fd;
-
 
 private:
+
+        // ---------------------------------------
+        // Connection state
+        // ---------------------------------------
+        typedef enum conn_state
+        {
+                CONN_STATE_FREE = 0,
+                CONN_STATE_CONNECTING,
+
+                // SSL
+                CONN_STATE_SSL_CONNECTING,
+                CONN_STATE_SSL_CONNECTING_WANT_READ,
+                CONN_STATE_SSL_CONNECTING_WANT_WRITE,
+
+                CONN_STATE_CONNECTED,
+                CONN_STATE_READING,
+                CONN_STATE_DONE
+        } conn_state_t;
+
         // -------------------------------------------------
         // Private methods
         // -------------------------------------------------
@@ -209,10 +205,13 @@ private:
 
         int32_t setup_socket(const host_info_t &a_host_info);
         int32_t ssl_connect_cb(const host_info_t &a_host_info);
+        int32_t receive_response(void);
 
         // -------------------------------------------------
         // Private members
         // -------------------------------------------------
+        int m_fd;
+
         // ssl
         SSL_CTX * m_ssl_ctx;
         SSL *m_ssl;
