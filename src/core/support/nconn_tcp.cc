@@ -48,11 +48,10 @@
                                 _sock_opt_name, \
                                 &_l__sock_opt_val, \
                                 sizeof(_l__sock_opt_val)); \
-                                if (_l_status == -1) { \
-                                        NDBG_PRINT("STATUS_ERROR: Failed to set %s count.  Reason: %s.\n", #_sock_opt_name, strerror(errno)); \
-                                        return STATUS_ERROR;\
-                                } \
-                                \
+                if (_l_status == -1) { \
+                        NDBG_PRINT("STATUS_ERROR: Failed to set %s count.  Reason: %s.\n", #_sock_opt_name, strerror(errno)); \
+                        return STATUS_ERROR;\
+                } \
         } while(0)
 
 //: ----------------------------------------------------------------------------
@@ -548,13 +547,28 @@ state_top:
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t nconn_tcp::set_opt(uint32_t a_opt, void *a_buf, uint32_t a_len)
+int32_t nconn_tcp::set_opt(uint32_t a_opt, const void *a_buf, uint32_t a_len)
 {
         switch(a_opt)
         {
         case OPT_TCP_REQ_BUF_LEN:
         {
                 m_req_buf_len = a_len;
+                break;
+        }
+        case OPT_TCP_RECV_BUF_SIZE:
+        {
+                m_sock_opt_recv_buf_size = a_len;
+                break;
+        }
+        case OPT_TCP_SEND_BUF_SIZE:
+        {
+                m_sock_opt_send_buf_size = a_len;
+                break;
+        }
+        case OPT_TCP_NO_DELAY:
+        {
+                m_sock_opt_no_delay = (bool)a_len;
                 break;
         }
         default:
@@ -574,6 +588,7 @@ int32_t nconn_tcp::set_opt(uint32_t a_opt, void *a_buf, uint32_t a_len)
 //: ----------------------------------------------------------------------------
 int32_t nconn_tcp::get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len)
 {
+
         switch(a_opt)
         {
         case OPT_TCP_REQ_BUF:

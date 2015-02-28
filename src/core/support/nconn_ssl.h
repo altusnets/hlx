@@ -54,10 +54,11 @@ public:
         // ---------------------------------------
         typedef enum ssl_opt_enum
         {
-                OPT_SSL_GET_REQ_BUF = 0,
-                OPT_SSL_GET_GLOBAL_REQ_BUF
-        } ssl_opt_t;
+                OPT_SSL_CIPHER_STR = 1000,
+                OPT_SSL_CTX = 1001,
 
+                OPT_SSL_SENTINEL = 1999
+        } ssl_opt_t;
 
         nconn_ssl(bool a_verbose,
                   bool a_color,
@@ -81,7 +82,7 @@ public:
         int32_t run_state_machine(evr_loop *a_evr_loop, const host_info_t &a_host_info);
         int32_t send_request(bool is_reuse = false);
         int32_t cleanup(evr_loop *a_evr_loop);
-        int32_t set_opt(uint32_t a_opt, void *a_buf, uint32_t a_len);
+        int32_t set_opt(uint32_t a_opt, const void *a_buf, uint32_t a_len);
         int32_t get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len);
 
         bool is_done(void) { return (m_ssl_state == SSL_STATE_DONE);}

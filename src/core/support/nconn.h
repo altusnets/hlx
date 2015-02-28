@@ -45,6 +45,28 @@ class evr_loop;
 //: Enums
 //: ----------------------------------------------------------------------------
 
+//: ----------------------------------------------------------------------------
+//: Macros
+//: ----------------------------------------------------------------------------
+#define SET_NCONN_OPT(_conn, _opt, _buf, _len) \
+        do { \
+                int _status = 0; \
+                _status = _conn.set_opt((_opt), (_buf), (_len)); \
+                if (_status != STATUS_OK) { \
+                        NDBG_PRINT("STATUS_ERROR: Failed to set_opt %d.  Status: %d.\n", _opt, _status); \
+                        return STATUS_ERROR;\
+                } \
+        } while(0)
+
+#define GET_NCONN_OPT(_conn, _opt, _buf, _len) \
+        do { \
+                int _status = 0; \
+                _status = _conn.get_opt((_opt), (_buf), (_len)); \
+                if (_status != STATUS_OK) { \
+                        NDBG_PRINT("STATUS_ERROR: Failed to get_opt %d.  Status: %d.\n", _opt, _status); \
+                        return STATUS_ERROR;\
+                } \
+        } while(0)
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -130,7 +152,7 @@ public:
         virtual int32_t send_request(bool is_reuse = false) = 0;
         virtual int32_t run_state_machine(evr_loop *a_evr_loop, const host_info_t &a_host_info) = 0;
         virtual int32_t cleanup(evr_loop *a_evr_loop) = 0;
-        virtual int32_t set_opt(uint32_t a_opt, void *a_buf, uint32_t a_len) = 0;
+        virtual int32_t set_opt(uint32_t a_opt, const void *a_buf, uint32_t a_len) = 0;
         virtual int32_t get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len) = 0;
 
         virtual void set_state_done(void) = 0;

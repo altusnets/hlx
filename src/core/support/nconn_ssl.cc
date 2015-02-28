@@ -412,6 +412,8 @@ state_top:
                         return STATUS_ERROR;
                 }
 
+                //NDBG_PRINT("m_ssl_ctx: %p\n", m_ssl_ctx);
+
                 // Create SSL Context
                 m_ssl = SSL_new(m_ssl_ctx);
                 // TODO Check for NULL
@@ -671,8 +673,11 @@ state_top:
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t nconn_ssl::set_opt(uint32_t a_opt, void *a_buf, uint32_t a_len)
+int32_t nconn_ssl::set_opt(uint32_t a_opt, const void *a_buf, uint32_t a_len)
 {
+
+        //NDBG_PRINT("HERE: a_opt: %d a_buf: %p\n", a_opt, a_buf);
+
         // TODO RUN SUPER
         int32_t l_status;
         l_status = nconn_tcp::set_opt(a_opt, a_buf, a_len);
@@ -688,6 +693,16 @@ int32_t nconn_ssl::set_opt(uint32_t a_opt, void *a_buf, uint32_t a_len)
 
         switch(a_opt)
         {
+        case OPT_SSL_CIPHER_STR:
+        {
+                //m_cipher_str = a_len;
+                break;
+        }
+        case OPT_SSL_CTX:
+        {
+                m_ssl_ctx = (SSL_CTX *)a_buf;
+                break;
+        }
         default:
         {
                 //NDBG_PRINT("Error unsupported option: %d\n", a_opt);

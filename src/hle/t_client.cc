@@ -440,9 +440,6 @@ nconn *t_client::create_new_nconn(uint32_t a_id, const reqlet &a_reqlet)
 {
         nconn *l_nconn = NULL;
 
-        // TODO!!!!
-        //l_nconn->set_id(i_conn);
-        //l_nconn->set_ssl_ctx(a_ssl_ctx);
 
         if(a_reqlet.m_url.m_scheme == nconn::SCHEME_TCP)
         {
@@ -512,6 +509,22 @@ int32_t t_client::start_connections(void)
                                 NDBG_PRINT("Error performing create_new_nconn\n");
                                 return STATUS_ERROR;
                         }
+
+                        // -------------------------------------------
+                        // Set options
+                        // -------------------------------------------
+                        // Set generic options
+                        SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_RECV_BUF_SIZE, NULL, m_sock_opt_recv_buf_size);
+                        SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_SEND_BUF_SIZE, NULL, m_sock_opt_send_buf_size);
+                        SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_NO_DELAY, NULL, m_sock_opt_no_delay);
+
+                        // Set ssl options
+                        if(l_reqlet->m_url.m_scheme == nconn::SCHEME_SSL)
+                        {
+                                SET_NCONN_OPT((*l_nconn), nconn_ssl::OPT_SSL_CIPHER_STR, m_cipher_str.c_str(), m_cipher_str.length());
+                                SET_NCONN_OPT((*l_nconn), nconn_ssl::OPT_SSL_CTX, m_ssl_ctx, sizeof(m_ssl_ctx));
+                        }
+
                 }
 
                 // Assign the reqlet for this client
@@ -563,16 +576,8 @@ int32_t t_client::create_request(nconn &ao_conn,
         char *l_req_buf = NULL;
         uint32_t l_req_buf_len = 0;
         uint32_t l_max_buf_len = nconn_tcp::m_max_req_buf;
-        int32_t l_status;
 
-        l_status = ao_conn.get_opt(nconn_tcp::OPT_TCP_REQ_BUF, (void **)(&l_req_buf), &l_req_buf_len);
-        if((l_status != STATUS_OK) ||
-           (l_status == nconn::m_opt_unhandled))
-        {
-                NDBG_PRINT("Error performing get_opt. Status: %d\n", l_status);
-                // TODO more info
-                return STATUS_ERROR;
-        }
+        GET_NCONN_OPT(ao_conn, nconn_tcp::OPT_TCP_REQ_BUF, (void **)(&l_req_buf), &l_req_buf_len);
 
         // -------------------------------------------
         // Request.
@@ -626,14 +631,7 @@ int32_t t_client::create_request(nconn &ao_conn,
         l_req_buf_len += snprintf(l_req_buf + l_req_buf_len, l_max_buf_len - l_req_buf_len, "\r\n");
 
         // Set len
-        l_status = ao_conn.set_opt(nconn_tcp::OPT_TCP_REQ_BUF_LEN, NULL, l_req_buf_len);
-        if(l_status != STATUS_OK)
-        {
-                NDBG_PRINT("Error performing set_opt\n");
-                // TODO more info
-                return STATUS_ERROR;
-        }
-
+        SET_NCONN_OPT(ao_conn, nconn_tcp::OPT_TCP_REQ_BUF_LEN, NULL, l_req_buf_len);
         return STATUS_OK;
 }
 

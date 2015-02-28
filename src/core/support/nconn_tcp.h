@@ -55,9 +55,14 @@ public:
         typedef enum tcp_opt_enum
         {
                 OPT_TCP_REQ_BUF = 0,
-                OPT_TCP_REQ_BUF_LEN,
-                OPT_TCP_GLOBAL_REQ_BUF,
-                OPT_TCP_GLOBAL_REQ_BUF_LEN
+                OPT_TCP_REQ_BUF_LEN = 1,
+                OPT_TCP_GLOBAL_REQ_BUF = 2,
+                OPT_TCP_GLOBAL_REQ_BUF_LEN = 3,
+                OPT_TCP_RECV_BUF_SIZE = 4,
+                OPT_TCP_SEND_BUF_SIZE = 5,
+                OPT_TCP_NO_DELAY = 6,
+
+                OPT_TCP_SENTINEL = 999
         } tcp_opt_t;
 
         nconn_tcp(bool a_verbose,
@@ -102,7 +107,7 @@ public:
         int32_t run_state_machine(evr_loop *a_evr_loop, const host_info_t &a_host_info);
         int32_t send_request(bool is_reuse = false);
         int32_t cleanup(evr_loop *a_evr_loop);
-        int32_t set_opt(uint32_t a_opt, void *a_buf, uint32_t a_len);
+        int32_t set_opt(uint32_t a_opt, const void *a_buf, uint32_t a_len);
         int32_t get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len);
 
         bool is_done(void) { return (m_tcp_state == TCP_STATE_DONE);}
