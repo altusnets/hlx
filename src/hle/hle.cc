@@ -29,6 +29,7 @@
 #include "t_client.h"
 #include "reqlet_repo.h"
 #include "reqlet.h"
+#include "ssl_util.h"
 
 //#include "util.h"
 
@@ -224,7 +225,7 @@ int32_t hle::init(void)
                 return STATUS_OK;
 
         // SSL init...
-        m_ssl_ctx = nconn_ssl_init(m_cipher_list);
+        m_ssl_ctx = ssl_init(m_cipher_list);
         if(NULL == m_ssl_ctx) {
                 NDBG_PRINT("Error: performing ssl_init with cipher_list: %s\n", m_cipher_list.c_str());
                 return STATUS_ERROR;
@@ -289,7 +290,7 @@ hle::~hle()
         }
 
         // SSL Cleanup
-        nconn_kill_locks();
+        ssl_kill_locks();
 
         // TODO Deprecated???
         //EVP_cleanup();

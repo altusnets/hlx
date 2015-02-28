@@ -24,18 +24,12 @@
 //: ----------------------------------------------------------------------------
 //: Includes
 //: ----------------------------------------------------------------------------
-#include "f_http_request.h"
-
-
-
-//: ----------------------------------------------------------------------------
-//: Macros
-//: ----------------------------------------------------------------------------
-
-
-//: ----------------------------------------------------------------------------
-//: Fwd Decl's
-//: ----------------------------------------------------------------------------
+#include "ndebug.h"
+#include "http_cb.h"
+#include "nconn.h"
+#include "req_stat.h"
+#include "reqlet.h"
+#include "util.h"
 
 //: ----------------------------------------------------------------------------
 //: http-parser callbacks
@@ -46,7 +40,7 @@
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int f_http_request::hp_on_message_begin(http_parser* a_parser)
+int hp_on_message_begin(http_parser* a_parser)
 {
         nconn *l_conn = static_cast <nconn *>(a_parser->data);
         if(l_conn)
@@ -64,7 +58,7 @@ int f_http_request::hp_on_message_begin(http_parser* a_parser)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int f_http_request::hp_on_url(http_parser* a_parser, const char *a_at, size_t a_length)
+int hp_on_url(http_parser* a_parser, const char *a_at, size_t a_length)
 {
         nconn *l_conn = static_cast <nconn *>(a_parser->data);
         if(l_conn)
@@ -85,7 +79,7 @@ int f_http_request::hp_on_url(http_parser* a_parser, const char *a_at, size_t a_
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int f_http_request::hp_on_status(http_parser* a_parser, const char *a_at, size_t a_length)
+int hp_on_status(http_parser* a_parser, const char *a_at, size_t a_length)
 {
         nconn *l_conn = static_cast <nconn *>(a_parser->data);
         if(l_conn)
@@ -135,7 +129,7 @@ int f_http_request::hp_on_status(http_parser* a_parser, const char *a_at, size_t
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int f_http_request::hp_on_header_field(http_parser* a_parser, const char *a_at, size_t a_length)
+int hp_on_header_field(http_parser* a_parser, const char *a_at, size_t a_length)
 {
         nconn *l_conn = static_cast <nconn *>(a_parser->data);
         if(l_conn)
@@ -170,7 +164,7 @@ int f_http_request::hp_on_header_field(http_parser* a_parser, const char *a_at, 
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int f_http_request::hp_on_header_value(http_parser* a_parser, const char *a_at, size_t a_length)
+int hp_on_header_value(http_parser* a_parser, const char *a_at, size_t a_length)
 {
         nconn *l_conn = static_cast <nconn *>(a_parser->data);
         if(l_conn)
@@ -202,7 +196,7 @@ int f_http_request::hp_on_header_value(http_parser* a_parser, const char *a_at, 
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int f_http_request::hp_on_headers_complete(http_parser* a_parser)
+int hp_on_headers_complete(http_parser* a_parser)
 {
         nconn *l_conn = static_cast <nconn *>(a_parser->data);
         if(l_conn)
@@ -227,7 +221,7 @@ int f_http_request::hp_on_headers_complete(http_parser* a_parser)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int f_http_request::hp_on_body(http_parser* a_parser, const char *a_at, size_t a_length)
+int hp_on_body(http_parser* a_parser, const char *a_at, size_t a_length)
 {
         nconn *l_conn = static_cast <nconn *>(a_parser->data);
         if(l_conn)
@@ -265,7 +259,7 @@ int f_http_request::hp_on_body(http_parser* a_parser, const char *a_at, size_t a
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int f_http_request::hp_on_message_complete(http_parser* a_parser)
+int hp_on_message_complete(http_parser* a_parser)
 {
         nconn *l_conn = static_cast <nconn *>(a_parser->data);
         if(l_conn)
@@ -283,10 +277,10 @@ int f_http_request::hp_on_message_complete(http_parser* a_parser)
                 }
 
                 //NDBG_PRINT("CONN[%u--%d] m_request_start_time_us: %" PRIu64 " m_tt_completion_us: %" PRIu64 "\n",
-                //		l_conn->m_connection_id,
-                //		l_conn->m_fd,
-                //		l_conn->m_request_start_time_us,
-                //		l_conn->m_stat.m_tt_completion_us);
+                //              l_conn->m_connection_id,
+                //              l_conn->m_fd,
+                //              l_conn->m_request_start_time_us,
+                //              l_conn->m_stat.m_tt_completion_us);
                 //if(!l_conn->m_stat.m_connect_start_time_us) abort();
 
                 if(http_should_keep_alive(a_parser))
@@ -299,7 +293,7 @@ int f_http_request::hp_on_message_complete(http_parser* a_parser)
                 }
 
                 // we outtie
-                l_conn->m_state = CONN_STATE_DONE;
+                l_conn->set_state_done();
 
         }
 

@@ -27,6 +27,8 @@
 #include "t_client.h"
 #include "hle.h"
 #include "reqlet_repo.h"
+#include "nconn_ssl.h"
+#include "nconn_tcp.h"
 
 #include <unistd.h>
 
@@ -46,6 +48,7 @@
 #include <inttypes.h>
 
 #include "tinymt64.h"
+
 
 
 //: ----------------------------------------------------------------------------
@@ -108,6 +111,7 @@ t_client::t_client(bool a_verbose,
 
         for(uint32_t i_conn = 0; i_conn < a_max_parallel_connections; ++i_conn)
         {
+#if 0
                 nconn *l_nconn = new nconn(m_verbose,
                                 m_color,
                                 m_sock_opt_recv_buf_size,
@@ -118,10 +122,9 @@ t_client::t_client(bool a_verbose,
                                 m_timeout_s,
                                 1,
                                 NULL);
+#endif
 
-                l_nconn->set_id(i_conn);
-                m_nconn_vector[i_conn] = l_nconn;
-                l_nconn->set_ssl_ctx(a_ssl_ctx);
+                m_nconn_vector[i_conn] = NULL;
                 m_conn_free_list.push_back(i_conn);
         }
 }
@@ -136,7 +139,11 @@ t_client::~t_client()
 {
         for(uint32_t i_conn = 0; i_conn < m_nconn_vector.size(); ++i_conn)
         {
-                delete m_nconn_vector[i_conn];
+                if(m_nconn_vector[i_conn])
+                {
+                        delete m_nconn_vector[i_conn];
+                        m_nconn_vector[i_conn] = NULL;
+                }
         }
 
         if(m_evr_loop)
@@ -429,6 +436,25 @@ void *t_client::t_run(void *a_nothing)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+nconn *t_client::create_new_nconn(uint32_t a_id, const reqlet &a_reqlet)
+{
+        nconn *l_nconn = NULL;
+
+        // TODO!!!!
+        //l_nconn->set_id(i_conn);
+        //l_nconn->set_ssl_ctx(a_ssl_ctx);
+
+
+        return l_nconn;
+
+}
+
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
 int32_t t_client::start_connections(void)
 {
         int32_t l_status;
@@ -458,12 +484,28 @@ int32_t t_client::start_connections(void)
                 nconn *l_nconn = m_nconn_vector[*i_conn];
                 // TODO Check for NULL
 
+                if(l_nconn &&
+                   (l_nconn->m_scheme != l_reqlet->m_url.m_scheme))
+                {
+                        // Destroy nconn and recreate
+                        delete l_nconn;
+                        l_nconn = NULL;
+                }
+
+
+                if(!l_nconn)
+                {
+                        // Create nconn
+                        l_nconn = create_new_nconn(*i_conn, *l_reqlet);
+                        if(!l_nconn)
+                        {
+                                NDBG_PRINT("Error performing create_new_nconn\n");
+                                return STATUS_ERROR;
+                        }
+                }
 
                 // Assign the reqlet for this client
                 l_nconn->set_data1(l_reqlet);
-
-                // Set scheme (mode HTTP/HTTPS)
-                l_nconn->set_scheme(l_reqlet->m_url.m_scheme);
 
                 // Bump stats
                 ++(l_reqlet->m_stat_agg.m_num_conn_started);
@@ -501,13 +543,25 @@ int32_t t_client::start_connections(void)
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
 int32_t t_client::create_request(nconn &ao_conn,
-                reqlet &a_reqlet)
+                                 reqlet &a_reqlet)
 {
 
+
+
+
         // Get client
-        char *l_req_buf = ao_conn.m_req_buf;
+        char *l_req_buf = NULL;
         uint32_t l_req_buf_len = 0;
-        uint32_t l_max_buf_len = sizeof(ao_conn.m_req_buf);
+        uint32_t l_max_buf_len = nconn_tcp::m_max_req_buf;
+        int32_t l_status;
+
+        l_status = ao_conn.get_opt(nconn_tcp::OPT_TCP_GET_GLOBAL_REQ_BUF, (void **)(&l_req_buf), &l_req_buf_len);
+        if(l_status != STATUS_OK)
+        {
+                NDBG_PRINT("Error performing get_opt\n");
+                // TODO more info
+                return STATUS_ERROR;
+        }
 
         // -------------------------------------------
         // Request.
@@ -561,7 +615,13 @@ int32_t t_client::create_request(nconn &ao_conn,
         l_req_buf_len += snprintf(l_req_buf + l_req_buf_len, l_max_buf_len - l_req_buf_len, "\r\n");
 
         // Set len
-        ao_conn.m_req_buf_len = l_req_buf_len;
+        l_status = ao_conn.set_opt(nconn_tcp::OPT_TCP_GET_GLOBAL_REQ_BUF_LEN, NULL, l_req_buf_len);
+        if(l_status != STATUS_OK)
+        {
+                NDBG_PRINT("Error performing set_opt\n");
+                // TODO more info
+                return STATUS_ERROR;
+        }
 
         return STATUS_OK;
 }
@@ -582,7 +642,7 @@ int32_t t_client::cleanup_connection(nconn *a_nconn, bool a_cancel_timer)
                 m_evr_loop->cancel_timer(&(a_nconn->m_timer_obj));
         }
         a_nconn->reset_stats();
-        a_nconn->done_cb(m_evr_loop);
+        a_nconn->cleanup(m_evr_loop);
 
         // Add back to free list
         m_conn_free_list.push_back(l_conn_id);

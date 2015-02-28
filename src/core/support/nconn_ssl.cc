@@ -2,7 +2,7 @@
 //: Copyright (C) 2014 Verizon.  All Rights Reserved.
 //: All Rights Reserved
 //:
-//: \file:    nconn.cc
+//: \file:    nconn_ssl.cc
 //: \details: TODO
 //: \author:  Reed P. Morrison
 //: \date:    02/07/2014
@@ -24,7 +24,9 @@
 //: ----------------------------------------------------------------------------
 //: Includes
 //: ----------------------------------------------------------------------------
-#include "nconn.h"
+#include "nconn_ssl.h"
+
+#if 0
 #include "util.h"
 #include "reqlet.h"
 #include "ndebug.h"
@@ -46,18 +48,12 @@
 #define __STDC_FORMAT_MACROS
 #endif
 #include <inttypes.h>
-
-#include <sys/stat.h>
-#include <pthread.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
-#include <openssl/bio.h>
-#include <openssl/rand.h>
-#include <openssl/crypto.h>
+#endif
 
 //: ----------------------------------------------------------------------------
 //: Macros
 //: ----------------------------------------------------------------------------
+#if 0
 // Set socket option macro...
 #define SET_SOCK_OPT(_sock_fd, _sock_opt_level, _sock_opt_name, _sock_opt_val) \
         do { \
@@ -74,286 +70,19 @@
                                 } \
                                 \
         } while(0)
+#endif
 
 //: ----------------------------------------------------------------------------
 //: Fwd Decl's
 //: ----------------------------------------------------------------------------
 
-//: ----------------------------------------------------------------------------
-//: http-parser callbacks
-//: ----------------------------------------------------------------------------
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int nconn::hp_on_message_begin(http_parser* a_parser)
-{
-        nconn *l_conn = static_cast <nconn *>(a_parser->data);
-        if(l_conn)
-        {
-                if(l_conn->m_verbose)
-                {
-                        NDBG_OUTPUT("%s: message begin\n", l_conn->m_host.c_str());
-                }
-        }
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int nconn::hp_on_url(http_parser* a_parser, const char *a_at, size_t a_length)
-{
-        nconn *l_conn = static_cast <nconn *>(a_parser->data);
-        if(l_conn)
-        {
-                if(l_conn->m_verbose)
-                {
-                        if(l_conn->m_color)
-                                NDBG_OUTPUT("%s: url:   %s%.*s%s\n", l_conn->m_host.c_str(), ANSI_COLOR_FG_YELLOW, (int)a_length, a_at, ANSI_COLOR_OFF);
-                        else
-                                NDBG_OUTPUT("%s: url:   %.*s\n", l_conn->m_host.c_str(), (int)a_length, a_at);
-                }
-        }
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int nconn::hp_on_status(http_parser* a_parser, const char *a_at, size_t a_length)
-{
-        nconn *l_conn = static_cast <nconn *>(a_parser->data);
-        if(l_conn)
-        {
-                if(l_conn->m_verbose)
-                {
-                        if(l_conn->m_color)
-                                NDBG_OUTPUT("%s: status: %s%.*s%s --STATUS = HTTP %d.%d METHOD[%d] %d--\n",
-                                                l_conn->m_host.c_str(),
-                                                ANSI_COLOR_FG_YELLOW, (int)a_length, a_at, ANSI_COLOR_OFF,
-                                                a_parser->http_major,
-                                                a_parser->http_minor,
-                                                a_parser->method,
-                                                a_parser->status_code);
-                        else
-                                NDBG_OUTPUT("%s: status: %.*s --STATUS = HTTP %d.%d METHOD[%d] %d--\n",
-                                                l_conn->m_host.c_str(),
-                                                (int)a_length, a_at,
-                                                a_parser->http_major,
-                                                a_parser->http_minor,
-                                                a_parser->method,
-                                                a_parser->status_code);
-                }
-
-                // Set status code
-                l_conn->m_stat.m_status_code = a_parser->status_code;
-
-                if(l_conn->m_save_response_in_reqlet)
-                {
-                        // Get reqlet
-                        reqlet *l_reqlet = static_cast<reqlet *>(l_conn->m_data1);
-                        if(l_reqlet)
-                        {
-                                std::string l_status;
-                                l_status.append(a_at, a_length);
-                                l_reqlet->m_response_headers["Status"] = l_status;
-                                l_reqlet->m_response_status = a_parser->status_code;
-                        }
-                }
-
-        }
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int nconn::hp_on_header_field(http_parser* a_parser, const char *a_at, size_t a_length)
-{
-        nconn *l_conn = static_cast <nconn *>(a_parser->data);
-        if(l_conn)
-        {
-                if(l_conn->m_verbose)
-                {
-                        if(l_conn->m_color)
-                                NDBG_OUTPUT("%s: field:  %s%.*s%s\n", l_conn->m_host.c_str(), ANSI_COLOR_FG_BLUE, (int)a_length, a_at, ANSI_COLOR_OFF);
-                        else
-                                NDBG_OUTPUT("%s: field:  %.*s\n", l_conn->m_host.c_str(), (int)a_length, a_at);
-                }
-
-                if(l_conn->m_save_response_in_reqlet)
-                {
-                        // Get reqlet
-                        reqlet *l_reqlet = static_cast<reqlet *>(l_conn->m_data1);
-                        if(l_reqlet)
-                        {
-                                std::string l_header;
-                                l_header.append(a_at, a_length);
-                                l_reqlet->m_response_headers[l_header] = "";
-                                l_reqlet->m_next_response_value = l_reqlet->m_response_headers.find(l_header);
-                        }
-                }
-
-        }
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int nconn::hp_on_header_value(http_parser* a_parser, const char *a_at, size_t a_length)
-{
-        nconn *l_conn = static_cast <nconn *>(a_parser->data);
-        if(l_conn)
-        {
-                if(l_conn->m_verbose)
-                {
-                        if(l_conn->m_color)
-                                NDBG_OUTPUT("%s: value:  %s%.*s%s\n", l_conn->m_host.c_str(), ANSI_COLOR_FG_GREEN, (int)a_length, a_at, ANSI_COLOR_OFF);
-                        else
-                                NDBG_OUTPUT("%s: value:  %.*s\n", l_conn->m_host.c_str(), (int)a_length, a_at);
-                }
-
-                if(l_conn->m_save_response_in_reqlet)
-                {
-                        // Get reqlet
-                        reqlet *l_reqlet = static_cast<reqlet *>(l_conn->m_data1);
-                        if(l_reqlet)
-                        {
-                                (l_reqlet->m_next_response_value)->second.append(a_at, a_length);
-                        }
-                }
-
-        }
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int nconn::hp_on_headers_complete(http_parser* a_parser)
-{
-        nconn *l_conn = static_cast <nconn *>(a_parser->data);
-        if(l_conn)
-        {
-                if(l_conn->m_verbose)
-                {
-                        NDBG_OUTPUT("%s: headers_complete\n", l_conn->m_host.c_str());
-                }
-
-                // Stats
-                if(l_conn->m_collect_stats_flag)
-                {
-                        l_conn->m_stat.m_tt_header_completion_us = get_delta_time_us(l_conn->m_request_start_time_us);
-                }
-
-        }
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int nconn::hp_on_body(http_parser* a_parser, const char *a_at, size_t a_length)
-{
-        nconn *l_conn = static_cast <nconn *>(a_parser->data);
-        if(l_conn)
-        {
-                if(l_conn->m_verbose)
-                {
-                        if(l_conn->m_color)
-                                NDBG_OUTPUT("%s: body:  %s%.*s%s\n", l_conn->m_host.c_str(), ANSI_COLOR_FG_YELLOW, (int)a_length, a_at, ANSI_COLOR_OFF);
-                        else
-                                NDBG_OUTPUT("%s: body:  %.*s\n", l_conn->m_host.c_str(), (int)a_length, a_at);
-                }
-
-                // Stats
-                if(l_conn->m_collect_stats_flag)
-                {
-                        l_conn->m_stat.m_body_bytes += a_length;
-                }
-
-                if(l_conn->m_save_response_in_reqlet)
-                {
-                        // Get reqlet
-                        reqlet *l_reqlet = static_cast<reqlet *>(l_conn->m_data1);
-                        if(l_reqlet)
-                        {
-                                l_reqlet->m_response_body.append(a_at, a_length);
-                        }
-                }
-
-        }
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int nconn::hp_on_message_complete(http_parser* a_parser)
-{
-        nconn *l_conn = static_cast <nconn *>(a_parser->data);
-        if(l_conn)
-        {
-                if(l_conn->m_verbose)
-                {
-                        NDBG_OUTPUT("%s: message complete\n", l_conn->m_host.c_str());
-                }
-
-                // Stats
-                // Stats
-                if(l_conn->m_collect_stats_flag)
-                {
-                        l_conn->m_stat.m_tt_completion_us = get_delta_time_us(l_conn->m_request_start_time_us);
-                }
-
-                //NDBG_PRINT("CONN[%u--%d] m_request_start_time_us: %" PRIu64 " m_tt_completion_us: %" PRIu64 "\n",
-                //		l_conn->m_connection_id,
-                //		l_conn->m_fd,
-                //		l_conn->m_request_start_time_us,
-                //		l_conn->m_stat.m_tt_completion_us);
-                //if(!l_conn->m_stat.m_connect_start_time_us) abort();
-
-                if(http_should_keep_alive(a_parser))
-                {
-                        l_conn->m_server_response_supports_keep_alives = true;
-                }
-                else
-                {
-                        l_conn->m_server_response_supports_keep_alives = false;
-                }
-
-                // we outtie
-                l_conn->m_state = CONN_STATE_DONE;
-
-        }
-
-
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
+#if 0
 int32_t nconn::setup_socket(const host_info_t &a_host_info)
 {
         // Make a socket.
@@ -411,37 +140,36 @@ int32_t nconn::setup_socket(const host_info_t &a_host_info)
         // -------------------------------------------
         // Initalize the http response parser
         // -------------------------------------------
-        if (m_scheme == SCHEME_HTTP)
+        if ((m_scheme == SCHEME_HTTP) || (m_scheme == SCHEME_HTTPS))
         {
                 m_http_parser.data = this;
                 http_parser_init(&m_http_parser, HTTP_RESPONSE);
         }
-        else if(m_scheme == SCHEME_HTTPS)
-        {
-                m_http_parser.data = this;
-                http_parser_init(&m_http_parser, HTTP_RESPONSE);
 
+        if(m_scheme == SCHEME_HTTPS)
+        {
                 // Create SSL Context
                 m_ssl = SSL_new(m_ssl_ctx);
                 // TODO Check for NULL
 
                 SSL_set_fd(m_ssl, m_fd);
                 // TODO Check for Errors
-
         }
 
         return STATUS_OK;
 }
+#endif
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t nconn::ssl_connect_cb(const host_info_t &a_host_info)
+#if 0
+int32_t nconn::ssl_connect(const host_info_t &a_host_info)
 {
         // -------------------------------------------
-        // HTTPS
+        // HTTPSf
         // -------------------------------------------
 
         int l_status;
@@ -546,12 +274,14 @@ int32_t nconn::ssl_connect_cb(const host_info_t &a_host_info)
         return STATUS_OK;
 
 }
+#endif
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+#if 0
 int32_t nconn::send_request(bool is_reuse)
 {
 
@@ -634,12 +364,14 @@ int32_t nconn::send_request(bool is_reuse)
 
 
 }
+#endif
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+#if 0
 int32_t nconn::receive_response(void)
 {
 
@@ -769,13 +501,15 @@ int32_t nconn::receive_response(void)
         return l_total_bytes_read;
 
 }
+#endif
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t nconn::done_cb(evr_loop *a_evr_loop)
+#if 0
+int32_t nconn::cleanup(evr_loop *a_evr_loop)
 {
         // Shut down connection
         if (m_scheme == SCHEME_HTTP)
@@ -805,23 +539,27 @@ int32_t nconn::done_cb(evr_loop *a_evr_loop)
         return STATUS_OK;
 
 }
+#endif
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+#if 0
 void nconn::reset_stats(void)
 {
         // Initialize stats
         stat_init(m_stat);
 }
+#endif
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+#if 0
 int32_t nconn::run_state_machine(evr_loop *a_evr_loop, const host_info_t &a_host_info)
 {
 
@@ -1018,7 +756,7 @@ state_top:
         {
                 int l_status;
                 //NDBG_PRINT("%sSSL_CONNECTING%s\n", ANSI_COLOR_BG_RED, ANSI_COLOR_OFF);
-                l_status = ssl_connect_cb(a_host_info);
+                l_status = ssl_connect(a_host_info);
                 if(EAGAIN == l_status)
                 {
                         if(CONN_STATE_SSL_CONNECTING_WANT_READ == m_state)
@@ -1104,244 +842,4 @@ state_top:
 
         return STATUS_OK;
 }
-
-//: ----------------------------------------------------------------------------
-//:                          OpenSSL Support
-//: ----------------------------------------------------------------------------
-
-//: ----------------------------------------------------------------------------
-//: Globals
-//: ----------------------------------------------------------------------------
-static pthread_mutex_t *g_lock_cs;
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-static void pthreads_locking_callback(int a_mode, int a_type, const char *a_file, int a_line)
-{
-#if 0
-        fprintf(stdout,"thread=%4d mode=%s lock=%s %s:%d\n",
-                        (int)CRYPTO_thread_id(),
-                        (mode&CRYPTO_LOCK)?"l":"u",
-                                        (type&CRYPTO_READ)?"r":"w",a_file,a_line);
 #endif
-
-#if 0
-        if (CRYPTO_LOCK_SSL_CERT == type)
-                fprintf(stdout,"(t,m,f,l) %ld %d %s %d\n",
-                                CRYPTO_thread_id(),
-                                a_mode,a_file,a_line);
-#endif
-
-        if (a_mode & CRYPTO_LOCK)
-        {
-                pthread_mutex_lock(&(g_lock_cs[a_type]));
-        } else
-        {
-                pthread_mutex_unlock(&(g_lock_cs[a_type]));
-
-        }
-
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-static unsigned long pthreads_thread_id(void)
-{
-        unsigned long ret;
-
-        ret=(unsigned long)pthread_self();
-        return(ret);
-
-}
-
-//: ----------------------------------------------------------------------------
-//:
-//: ----------------------------------------------------------------------------
-struct CRYPTO_dynlock_value
-{
-        pthread_mutex_t mutex;
-};
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-static struct CRYPTO_dynlock_value* dyn_create_function(const char* a_file, int a_line)
-{
-        struct CRYPTO_dynlock_value* value = new CRYPTO_dynlock_value;
-        if (!value) return NULL;
-
-        pthread_mutex_init(&value->mutex, NULL);
-        return value;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-static void dyn_lock_function(int a_mode,
-                              struct CRYPTO_dynlock_value* a_l,
-                              const char* a_file,
-                              int a_line)
-{
-        if (a_mode & CRYPTO_LOCK)
-        {
-                pthread_mutex_lock(&a_l->mutex);
-        }
-        else
-        {
-                pthread_mutex_unlock(&a_l->mutex);
-        }
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-static void dyn_destroy_function(struct CRYPTO_dynlock_value* a_l,
-                                 const char* a_file,
-                                 int a_line)
-{
-        if(a_l)
-        {
-                pthread_mutex_destroy(&a_l->mutex);
-                free(a_l);
-        }
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-void nconn_kill_locks(void)
-{
-        CRYPTO_set_id_callback(NULL);
-        CRYPTO_set_locking_callback(NULL);
-        if(g_lock_cs)
-        {
-                for (int i=0; i<CRYPTO_num_locks(); ++i)
-                {
-                        pthread_mutex_destroy(&(g_lock_cs[i]));
-                }
-        }
-
-        OPENSSL_free(g_lock_cs);
-        g_lock_cs = NULL;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: OpenSSL can safely be used in multi-threaded applications provided
-//:           that at least two callback functions are set, locking_function and
-//:           threadid_func this function sets those two callbacks.
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-static void init_ssl_locking(void)
-{
-        int l_num_locks = CRYPTO_num_locks();
-        g_lock_cs = (pthread_mutex_t *)OPENSSL_malloc(l_num_locks * sizeof(pthread_mutex_t));
-        //g_lock_cs =(pthread_mutex_t*)malloc(        l_num_locks * sizeof(pthread_mutex_t));
-
-        for (int i=0; i<l_num_locks; ++i)
-        {
-                pthread_mutex_init(&(g_lock_cs[i]),NULL);
-        }
-
-        CRYPTO_set_id_callback(pthreads_thread_id);
-        CRYPTO_set_locking_callback(pthreads_locking_callback);
-        CRYPTO_set_dynlock_create_callback(dyn_create_function);
-        CRYPTO_set_dynlock_lock_callback(dyn_lock_function);
-        CRYPTO_set_dynlock_destroy_callback(dyn_destroy_function);
-
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: Initialize OpenSSL
-//: \return:  ctx on success, NULL on failure
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-SSL_CTX* nconn_ssl_init(const std::string &a_cipher_list)
-{
-        SSL_CTX *server_ctx;
-
-        // Initialize the OpenSSL library
-        SSL_library_init();
-
-        // Bring in and register error messages
-        ERR_load_crypto_strings();
-        SSL_load_error_strings();
-
-        // TODO Deprecated???
-        //SSLeay_add_ssl_algorithms();
-        OpenSSL_add_all_algorithms();
-
-
-        // Set up for thread safety
-        init_ssl_locking();
-
-        // We MUST have entropy, or else there's no point to crypto.
-        if (!RAND_poll())
-        {
-                return NULL;
-        }
-
-        // TODO Old method???
-#if 0
-        // Random seed
-        if (! RAND_status())
-        {
-                unsigned char bytes[1024];
-                for (size_t i = 0; i < sizeof(bytes); ++i)
-                        bytes[i] = random() % 0xff;
-                RAND_seed(bytes, sizeof(bytes));
-        }
-#endif
-
-        server_ctx = SSL_CTX_new(SSLv23_client_method()); /* Create new context */
-        if (server_ctx == NULL)
-        {
-                ERR_print_errors_fp(stderr);
-                NDBG_PRINT("SSL_CTX_new Error: %s\n", ERR_error_string(ERR_get_error(), NULL));
-                return NULL;
-        }
-
-        if (a_cipher_list.size() > 0)
-        {
-                if (! SSL_CTX_set_cipher_list(server_ctx, a_cipher_list.c_str()))
-                {
-                        NDBG_PRINT("ERRRO: cannot set m_cipher list\n");
-                        ERR_print_errors_fp(stderr);
-                        //close_connection(con, nowP);
-                        return NULL;
-                }
-        }
-
-
-#if 0
-        if (!SSL_CTX_load_verify_locations(ctx,
-                        DEFAULT_PEM_FILE,
-                        NULL))
-        {
-                fprintf(stderr, "Error loading trust store\n");
-                ERR_print_errors_fp(stderr);
-                SSL_CTX_free(ctx);
-                ctx = NULL;
-        }
-#endif
-
-        //NDBG_PRINT("SSL_CTX_new success\n");
-
-        return server_ctx;
-
-}
-
