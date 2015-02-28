@@ -28,29 +28,15 @@
 //: ----------------------------------------------------------------------------
 #include "nconn.h"
 #include "ndebug.h"
-
-#if 0
 #include "http_cb.h"
-#include "host_info.h"
-#include "req_stat.h"
-#endif
 
 //: ----------------------------------------------------------------------------
 //: Constants
 //: ----------------------------------------------------------------------------
-#if 0
-#define MAX_READ_BUF (16*1024)
-#define MAX_REQ_BUF (2048)
-#endif
-
 
 //: ----------------------------------------------------------------------------
 //: Fwd Decl's
 //: ----------------------------------------------------------------------------
-#if 0
-class evr_loop;
-class parsed_url;
-#endif
 
 //: ----------------------------------------------------------------------------
 //: Enums
@@ -68,55 +54,66 @@ public:
         // ---------------------------------------
         typedef enum tcp_opt_enum
         {
-                OPT_TCP_GET_REQ_BUF = 0,
-                OPT_TCP_GET_REQ_BUF_LEN,
-                OPT_TCP_GET_GLOBAL_REQ_BUF,
-                OPT_TCP_GET_GLOBAL_REQ_BUF_LEN
+                OPT_TCP_REQ_BUF = 0,
+                OPT_TCP_REQ_BUF_LEN,
+                OPT_TCP_GLOBAL_REQ_BUF,
+                OPT_TCP_GLOBAL_REQ_BUF_LEN
         } tcp_opt_t;
 
-#if 0
-        void set_host(const std::string &a_host) {m_host = a_host;};
-        int32_t run_state_machine(evr_loop *a_evr_loop, const host_info_t &a_host_info);
-        int32_t send_request(bool is_reuse = false);
-        int32_t cleanup(evr_loop *a_evr_loop);
-        bool can_reuse(void)
+        nconn_tcp(bool a_verbose,
+                  bool a_color,
+                  int64_t a_max_reqs_per_conn = -1,
+                  bool a_save_response_in_reqlet = false,
+                  bool a_collect_stats = false,
+                  void *a_rand_ptr = NULL):
+                          nconn(a_verbose, a_color, a_max_reqs_per_conn, a_save_response_in_reqlet, a_collect_stats, a_rand_ptr),
+                          m_tcp_state(TCP_STATE_FREE),
+                          m_fd(-1),
+                          m_http_parser_settings(),
+                          m_http_parser(),
+                          m_sock_opt_recv_buf_size(),
+                          m_sock_opt_send_buf_size(),
+                          m_sock_opt_no_delay(false),
+                          m_timeout_s(10),
+                          m_req_buf(),
+                          m_req_buf_len(),
+                          m_read_buf(),
+                          m_read_buf_idx(0),
+                          s_req_buf(),
+                          s_req_buf_len()
+
         {
-                //NDBG_PRINT("CONN[%u] num / max %ld / %ld \n", m_connection_id, m_num_reqs, m_max_reqs_per_conn);
-                if(m_server_response_supports_keep_alives &&
-                   ((m_max_reqs_per_conn == -1) || (m_num_reqs < m_max_reqs_per_conn)))
-                {
-                        return true;
-                }
-                else
-                {
-                        return false;
-                }
-        }
-        void set_ssl_ctx(SSL_CTX * a_ssl_ctx) { m_ssl_ctx = a_ssl_ctx;};
-        void reset_stats(void);
-        const req_stat_t &get_stats(void) const { return m_stat;};
-        void set_scheme(scheme_t a_scheme) {m_scheme = a_scheme;};
-        bool is_done(void) { return (m_state == CONN_STATE_DONE);}
-        void set_id(uint64_t a_id) {m_id = a_id;}
-        uint64_t get_id(void) {return m_id;}
-        void set_data1(void * a_data) {m_data1 = a_data;}
-        void *get_data1(void) {return m_data1;}
-#endif
+                // Set up callbacks...
+                m_http_parser_settings.on_message_begin = hp_on_message_begin;
+                m_http_parser_settings.on_url = hp_on_url;
+                m_http_parser_settings.on_status = hp_on_status;
+                m_http_parser_settings.on_header_field = hp_on_header_field;
+                m_http_parser_settings.on_header_value = hp_on_header_value;
+                m_http_parser_settings.on_headers_complete = hp_on_headers_complete;
+                m_http_parser_settings.on_body = hp_on_body;
+                m_http_parser_settings.on_message_complete = hp_on_message_complete;
+        };
 
         // Destructor
         ~nconn_tcp()
         {
         };
 
+        int32_t run_state_machine(evr_loop *a_evr_loop, const host_info_t &a_host_info);
+        int32_t send_request(bool is_reuse = false);
+        int32_t cleanup(evr_loop *a_evr_loop);
+        int32_t set_opt(uint32_t a_opt, void *a_buf, uint32_t a_len);
+        int32_t get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len);
 
-        // TODO FINISH!!!
-        void set_state_done(void) { /*m_state = CONN_STATE_DONE;*/ };
+        bool is_done(void) { return (m_tcp_state == TCP_STATE_DONE);}
+        void set_state_done(void) { m_tcp_state = TCP_STATE_DONE; };
 
         // -------------------------------------------------
         // Public static methods
         // -------------------------------------------------
         static const scheme_t m_scheme = SCHEME_TCP;
         static const uint32_t m_max_req_buf = 2048;
+        static const uint32_t m_max_read_buf = 16*1024;
 
         // -------------------------------------------------
         // Public members
@@ -127,79 +124,58 @@ private:
         // ---------------------------------------
         // Connection state
         // ---------------------------------------
-#if 0
-        typedef enum conn_state
+        typedef enum tcp_conn_state
         {
-                CONN_STATE_FREE = 0,
-                CONN_STATE_CONNECTING,
-
-                // SSL
-                CONN_STATE_SSL_CONNECTING,
-                CONN_STATE_SSL_CONNECTING_WANT_READ,
-                CONN_STATE_SSL_CONNECTING_WANT_WRITE,
-
-                CONN_STATE_CONNECTED,
-                CONN_STATE_READING,
-                CONN_STATE_DONE
-        } conn_state_t;
-#endif
+                TCP_STATE_FREE = 0,
+                TCP_STATE_CONNECTING,
+                TCP_STATE_CONNECTED,
+                TCP_STATE_READING,
+                TCP_STATE_DONE
+        } tcp_conn_state_t;
 
         // -------------------------------------------------
         // Private methods
         // -------------------------------------------------
         DISALLOW_COPY_AND_ASSIGN(nconn_tcp)
 
-#if 0
-        int32_t setup_socket(const host_info_t &a_host_info);
-        int32_t ssl_connect(const host_info_t &a_host_info);
         int32_t receive_response(void);
-#endif
 
         // -------------------------------------------------
         // Private members
         // -------------------------------------------------
-        char m_req_buf[m_max_req_buf];
-        uint32_t m_req_buf_len;
+        tcp_conn_state_t m_tcp_state;
 
-#if 0
+        // -------------------------------------------------
+        // Protectected methods
+        // -------------------------------------------------
+protected:
+        int32_t setup_socket(const host_info_t &a_host_info);
+
+        // -------------------------------------------------
+        // Protectected members
+        // -------------------------------------------------
+protected:
         int m_fd;
-
-        // ssl
-        SSL_CTX * m_ssl_ctx;
-        SSL *m_ssl;
-
-        conn_state_t m_state;
-        req_stat_t m_stat;
-        uint64_t m_id;
-        void *m_data1;
-        bool m_save_response_in_reqlet;
 
         http_parser_settings m_http_parser_settings;
         http_parser m_http_parser;
-        bool m_server_response_supports_keep_alives;
-#endif
 
-#if 0
         // Socket options
         uint32_t m_sock_opt_recv_buf_size;
         uint32_t m_sock_opt_send_buf_size;
         bool m_sock_opt_no_delay;
+        uint32_t m_timeout_s;
 
-        char m_read_buf[MAX_READ_BUF];
+        char m_req_buf[m_max_req_buf];
+        uint32_t m_req_buf_len;
+        char m_read_buf[m_max_read_buf];
         uint32_t m_read_buf_idx;
 
-        int64_t m_max_reqs_per_conn;
-        int64_t m_num_reqs;
-
-        uint64_t m_connect_start_time_us;
-        uint64_t m_request_start_time_us;
-        uint64_t m_last_connect_time_us;
-
-        scheme_t m_scheme;
-        std::string m_host;
-        bool m_collect_stats_flag;
-        uint32_t m_timeout_s;
-#endif
+        // -------------------------------------------------
+        // Private static members
+        // -------------------------------------------------
+        char *s_req_buf;
+        uint32_t s_req_buf_len;
 
 };
 

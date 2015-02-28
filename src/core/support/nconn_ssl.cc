@@ -25,20 +25,21 @@
 //: Includes
 //: ----------------------------------------------------------------------------
 #include "nconn_ssl.h"
-
-#if 0
 #include "util.h"
-#include "reqlet.h"
-#include "ndebug.h"
 #include "evr.h"
-#include "parsed_url.h"
 
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
+
+#if 0
+#include "reqlet.h"
+#include "ndebug.h"
+#include "parsed_url.h"
+
 #include <string>
 
 // Fcntl and friends
-#include <unistd.h>
 #include <fcntl.h>
 
 #include <netinet/tcp.h>
@@ -50,130 +51,35 @@
 #include <inttypes.h>
 #endif
 
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <openssl/bio.h>
+#include <openssl/rand.h>
+#include <openssl/crypto.h>
+
+
 //: ----------------------------------------------------------------------------
 //: Macros
 //: ----------------------------------------------------------------------------
-#if 0
-// Set socket option macro...
-#define SET_SOCK_OPT(_sock_fd, _sock_opt_level, _sock_opt_name, _sock_opt_val) \
-        do { \
-                int _l__sock_opt_val = _sock_opt_val; \
-                int _l_status = 0; \
-                _l_status = ::setsockopt(_sock_fd, \
-                                _sock_opt_level, \
-                                _sock_opt_name, \
-                                &_l__sock_opt_val, \
-                                sizeof(_l__sock_opt_val)); \
-                                if (_l_status == -1) { \
-                                        NDBG_PRINT("STATUS_ERROR: Failed to set %s count.  Reason: %s.\n", #_sock_opt_name, strerror(errno)); \
-                                        return STATUS_ERROR;\
-                                } \
-                                \
-        } while(0)
-#endif
+
 
 //: ----------------------------------------------------------------------------
 //: Fwd Decl's
 //: ----------------------------------------------------------------------------
 
-
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-#if 0
-int32_t nconn::setup_socket(const host_info_t &a_host_info)
-{
-        // Make a socket.
-        m_fd = socket(a_host_info.m_sock_family,
-                      a_host_info.m_sock_type,
-                      a_host_info.m_sock_protocol);
-
-        //NDBG_OUTPUT("%sSOCKET %s[%3d]: \n", ANSI_COLOR_BG_BLUE, ANSI_COLOR_OFF, m_fd);
-
-        if (m_fd < 0)
-        {
-                NDBG_PRINT("Error creating socket. Reason: %s\n", strerror(errno));
-                return STATUS_ERROR;
-        }
-
-        // -------------------------------------------
-        // Socket options
-        // -------------------------------------------
-        // TODO --set to REUSE????
-        SET_SOCK_OPT(m_fd, SOL_SOCKET, SO_REUSEADDR, 1);
-
-        if(m_sock_opt_send_buf_size)
-        {
-                SET_SOCK_OPT(m_fd, SOL_SOCKET, SO_SNDBUF, m_sock_opt_send_buf_size);
-        }
-
-        if(m_sock_opt_recv_buf_size)
-        {
-                SET_SOCK_OPT(m_fd, SOL_SOCKET, SO_RCVBUF, m_sock_opt_recv_buf_size);
-        }
-
-
-        if(m_sock_opt_no_delay)
-        {
-                SET_SOCK_OPT(m_fd, SOL_TCP, TCP_NODELAY, 1);
-        }
-
-        // -------------------------------------------
-        // Can set with set_sock_opt???
-        // -------------------------------------------
-        // Set the file descriptor to no-delay mode.
-        const int flags = fcntl(m_fd, F_GETFL, 0);
-        if (flags == -1)
-        {
-                NDBG_PRINT("Error getting flags for fd. Reason: %s\n", strerror(errno));
-                return STATUS_ERROR;
-        }
-
-        if (fcntl(m_fd, F_SETFL, flags | O_NONBLOCK) < 0)
-        {
-                NDBG_PRINT("Error setting fd to non-block mode. Reason: %s\n", strerror(errno));
-                return STATUS_ERROR;
-        }
-
-        // -------------------------------------------
-        // Initalize the http response parser
-        // -------------------------------------------
-        if ((m_scheme == SCHEME_HTTP) || (m_scheme == SCHEME_HTTPS))
-        {
-                m_http_parser.data = this;
-                http_parser_init(&m_http_parser, HTTP_RESPONSE);
-        }
-
-        if(m_scheme == SCHEME_HTTPS)
-        {
-                // Create SSL Context
-                m_ssl = SSL_new(m_ssl_ctx);
-                // TODO Check for NULL
-
-                SSL_set_fd(m_ssl, m_fd);
-                // TODO Check for Errors
-        }
-
-        return STATUS_OK;
-}
-#endif
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-#if 0
-int32_t nconn::ssl_connect(const host_info_t &a_host_info)
+int32_t nconn_ssl::ssl_connect(const host_info_t &a_host_info)
 {
         // -------------------------------------------
         // HTTPSf
         // -------------------------------------------
 
         int l_status;
-        m_state = CONN_STATE_SSL_CONNECTING;
+        m_ssl_state = SSL_STATE_SSL_CONNECTING;
 
         l_status = SSL_connect(m_ssl);
         // TODO REMOVE
@@ -195,14 +101,14 @@ int32_t nconn::ssl_connect(const host_info_t &a_host_info)
                 case SSL_ERROR_WANT_READ:
                 {
                         //NDBG_PRINT("%sSSL_CON%s[%3d]: SSL_ERROR_WANT_READ\n", ANSI_COLOR_BG_GREEN, ANSI_COLOR_OFF, m_fd);
-                        m_state = CONN_STATE_SSL_CONNECTING_WANT_READ;
+                        m_ssl_state = SSL_STATE_SSL_CONNECTING_WANT_READ;
                         return EAGAIN;
 
                 }
                 case SSL_ERROR_WANT_WRITE:
                 {
-                        //NDBG_PRINT("%sSSL_CON%s[%3d]: CONN_STATE_SSL_CONNECTING_WANT_WRITE\n", ANSI_COLOR_BG_GREEN, ANSI_COLOR_OFF, m_fd);
-                        m_state = CONN_STATE_SSL_CONNECTING_WANT_WRITE;
+                        //NDBG_PRINT("%sSSL_CON%s[%3d]: SSL_STATE_SSL_CONNECTING_WANT_WRITE\n", ANSI_COLOR_BG_GREEN, ANSI_COLOR_OFF, m_fd);
+                        m_ssl_state = SSL_STATE_SSL_CONNECTING_WANT_WRITE;
                         return EAGAIN;
                 }
 
@@ -246,7 +152,7 @@ int32_t nconn::ssl_connect(const host_info_t &a_host_info)
         }
         else if(1 == l_status)
         {
-                m_state = CONN_STATE_CONNECTED;
+                m_ssl_state = SSL_STATE_CONNECTED;
         }
 
         // Stats
@@ -274,15 +180,13 @@ int32_t nconn::ssl_connect(const host_info_t &a_host_info)
         return STATUS_OK;
 
 }
-#endif
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-#if 0
-int32_t nconn::send_request(bool is_reuse)
+int32_t nconn_ssl::send_request(bool is_reuse)
 {
 
         //NDBG_OUTPUT("%s: REQUEST-->\n%s%.*s%s\n", m_host.c_str(), ANSI_COLOR_BG_MAGENTA, (int)m_req_buf_len, m_req_buf, ANSI_COLOR_OFF);
@@ -316,35 +220,13 @@ int32_t nconn::send_request(bool is_reuse)
         int l_status;
         while(l_bytes_written < m_req_buf_len)
         {
-
-                // -----------------------------------------
-                //
-                // -----------------------------------------
-                if(m_scheme == SCHEME_HTTP)
+                l_status = SSL_write(m_ssl, m_req_buf + l_bytes_written, m_req_buf_len - l_bytes_written);
+                if(l_status < 0)
                 {
-                        l_status = write(m_fd, m_req_buf + l_bytes_written, m_req_buf_len - l_bytes_written);
-                        if(l_status < 0)
-                        {
-                                NDBG_PRINT("Error: performing write.  Reason: %s.\n", strerror(errno));
-                                return STATUS_ERROR;
-                        }
-                        l_bytes_written += l_status;
-
+                        NDBG_PRINT("Error: performing SSL_write.\n");
+                        return STATUS_ERROR;
                 }
-                // -----------------------------------------
-                //
-                // -----------------------------------------
-                else if(m_scheme == SCHEME_HTTPS)
-                {
-                        l_status = SSL_write(m_ssl, m_req_buf + l_bytes_written, m_req_buf_len - l_bytes_written);
-                        if(l_status < 0)
-                        {
-                                NDBG_PRINT("Error: performing SSL_write.\n");
-                                return STATUS_ERROR;
-                        }
-                        l_bytes_written += l_status;
-                }
-
+                l_bytes_written += l_status;
         }
 
         // TODO REMOVE
@@ -357,62 +239,37 @@ int32_t nconn::send_request(bool is_reuse)
                 m_request_start_time_us = get_time_us();
         }
 
-        m_state = CONN_STATE_READING;
+        m_ssl_state = SSL_STATE_READING;
         //header_state = HDST_LINE1_PROTOCOL;
 
         return STATUS_OK;
-
-
 }
-#endif
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-#if 0
-int32_t nconn::receive_response(void)
+int32_t nconn_ssl::receive_response(void)
 {
 
         uint32_t l_total_bytes_read = 0;
         int32_t l_bytes_read = 0;
-        int32_t l_max_read = MAX_READ_BUF - m_read_buf_idx;
+        int32_t l_max_read = m_max_read_buf - m_read_buf_idx;
         bool l_should_give_up = false;
 
         do {
-                // -----------------------------------------
-                // HTTP
-                // -----------------------------------------
-                if (m_scheme == SCHEME_HTTP)
+                l_bytes_read = SSL_read(m_ssl, m_read_buf + m_read_buf_idx, l_max_read);
+                if(l_bytes_read < 0)
                 {
-                        do {
-                                l_bytes_read = read(m_fd, m_read_buf + m_read_buf_idx, l_max_read);
-                                //NDBG_PRINT("%sHOST%s: %s fd[%3d] READ: %d bytes. Reason: %s\n",
-                                //                ANSI_COLOR_FG_RED, ANSI_COLOR_OFF, m_host.c_str(), m_fd,
-                                //                l_bytes_read,
-                                //                strerror(errno));
-
-                        } while((l_bytes_read < 0) && (errno == EAGAIN));
-                }
-                // -----------------------------------------
-                // HTTPS
-                // -----------------------------------------
-                else if (m_scheme == SCHEME_HTTPS)
-                {
-
-                        l_bytes_read = SSL_read(m_ssl, m_read_buf + m_read_buf_idx, l_max_read);
-                        if(l_bytes_read < 0)
+                        int l_ssl_error = SSL_get_error(m_ssl, l_bytes_read);
+                        //NDBG_PRINT("%sSSL_READ%s[%3d] l_bytes_read: %d error: %d\n",
+                        //                ANSI_COLOR_BG_RED, ANSI_COLOR_OFF,
+                        //                SSL_get_fd(m_ssl), l_bytes_read,
+                        //                l_ssl_error);
+                        if(l_ssl_error == SSL_ERROR_WANT_READ)
                         {
-                                int l_ssl_error = SSL_get_error(m_ssl, l_bytes_read);
-                                //NDBG_PRINT("%sSSL_READ%s[%3d] l_bytes_read: %d error: %d\n",
-                                //                ANSI_COLOR_BG_RED, ANSI_COLOR_OFF,
-                                //                SSL_get_fd(m_ssl), l_bytes_read,
-                                //                l_ssl_error);
-                                if(l_ssl_error == SSL_ERROR_WANT_READ)
-                                {
-                                        return STATUS_OK;
-                                }
+                                return STATUS_OK;
                         }
                 }
 
@@ -450,36 +307,32 @@ int32_t nconn::receive_response(void)
                 }
 
                 // -----------------------------------------
-                // HTTP(S) Parse result
+                // Parse result
                 // -----------------------------------------
-                if ((m_scheme == SCHEME_HTTP) ||
-                    (m_scheme == SCHEME_HTTPS))
+                size_t l_parse_status = 0;
+                //NDBG_PRINT("%sHTTP_PARSER%s: m_read_buf: %p, m_read_buf_idx: %d, l_bytes_read: %d\n",
+                //                ANSI_COLOR_BG_YELLOW, ANSI_COLOR_OFF,
+                //                m_read_buf, (int)m_read_buf_idx, (int)l_bytes_read);
+                l_parse_status = http_parser_execute(&m_http_parser, &m_http_parser_settings, m_read_buf + m_read_buf_idx, l_bytes_read);
+                if(l_parse_status < (size_t)l_bytes_read)
                 {
-                        size_t l_parse_status = 0;
-                        //NDBG_PRINT("%sHTTP_PARSER%s: m_read_buf: %p, m_read_buf_idx: %d, l_bytes_read: %d\n",
-                        //                ANSI_COLOR_BG_YELLOW, ANSI_COLOR_OFF,
-                        //                m_read_buf, (int)m_read_buf_idx, (int)l_bytes_read);
-                        l_parse_status = http_parser_execute(&m_http_parser, &m_http_parser_settings, m_read_buf + m_read_buf_idx, l_bytes_read);
-                        if(l_parse_status < (size_t)l_bytes_read)
+                        if(m_verbose)
                         {
-                                if(m_verbose)
-                                {
-                                        NDBG_PRINT("%s: Error: parse error.  Reason: %s: %s\n",
-                                                        m_host.c_str(),
-                                                        //"","");
-                                                        http_errno_name((enum http_errno)m_http_parser.http_errno),
-                                                        http_errno_description((enum http_errno)m_http_parser.http_errno));
-                                        //NDBG_PRINT("%s: %sl_bytes_read%s[%d] <= 0 total = %u idx = %u\n",
-                                        //		m_host.c_str(),
-                                        //		ANSI_COLOR_FG_RED, ANSI_COLOR_OFF, l_bytes_read, l_total_bytes_read, m_read_buf_idx);
-                                        //ns_hlo::mem_display((const uint8_t *)m_read_buf + m_read_buf_idx, l_bytes_read);
-
-                                }
-
-                                m_read_buf_idx += l_bytes_read;
-                                return STATUS_ERROR;
+                                NDBG_PRINT("%s: Error: parse error.  Reason: %s: %s\n",
+                                                m_host.c_str(),
+                                                //"","");
+                                                http_errno_name((enum http_errno)m_http_parser.http_errno),
+                                                http_errno_description((enum http_errno)m_http_parser.http_errno));
+                                //NDBG_PRINT("%s: %sl_bytes_read%s[%d] <= 0 total = %u idx = %u\n",
+                                //		m_host.c_str(),
+                                //		ANSI_COLOR_FG_RED, ANSI_COLOR_OFF, l_bytes_read, l_total_bytes_read, m_read_buf_idx);
+                                //ns_hlo::mem_display((const uint8_t *)m_read_buf + m_read_buf_idx, l_bytes_read);
 
                         }
+
+                        m_read_buf_idx += l_bytes_read;
+                        return STATUS_ERROR;
+
                 }
 
                 m_read_buf_idx += l_bytes_read;
@@ -499,68 +352,41 @@ int32_t nconn::receive_response(void)
         } while(l_bytes_read > 0);
 
         return l_total_bytes_read;
-
 }
-#endif
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-#if 0
-int32_t nconn::cleanup(evr_loop *a_evr_loop)
+int32_t nconn_ssl::cleanup(evr_loop *a_evr_loop)
 {
         // Shut down connection
-        if (m_scheme == SCHEME_HTTP)
+        if(m_ssl)
         {
-
-        }
-        else if (m_scheme == SCHEME_HTTPS)
-        {
-                if(m_ssl)
-                {
-                        SSL_free(m_ssl);
-                        m_ssl = NULL;
-                }
+                SSL_free(m_ssl);
+                m_ssl = NULL;
         }
 
         //NDBG_PRINT("CLOSE[%lu--%d] %s--CONN--%s\n", m_id, m_fd, ANSI_COLOR_BG_RED, ANSI_COLOR_OFF);
-        close(m_fd);
-        m_fd = -1;
 
         // Reset all the values
         // TODO Make init function...
         // Set num use back to zero -we need reset method here?
-        m_state = CONN_STATE_FREE;
-        m_read_buf_idx = 0;
-        m_num_reqs = 0;
+        m_ssl_state = SSL_STATE_FREE;
+
+        // Super
+        nconn_tcp::cleanup(a_evr_loop);
 
         return STATUS_OK;
-
 }
-#endif
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-#if 0
-void nconn::reset_stats(void)
-{
-        // Initialize stats
-        stat_init(m_stat);
-}
-#endif
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-#if 0
-int32_t nconn::run_state_machine(evr_loop *a_evr_loop, const host_info_t &a_host_info)
+int32_t nconn_ssl::run_state_machine(evr_loop *a_evr_loop, const host_info_t &a_host_info)
 {
 
         uint32_t l_retry_connect_count = 0;
@@ -568,16 +394,16 @@ int32_t nconn::run_state_machine(evr_loop *a_evr_loop, const host_info_t &a_host
         // Cancel last timer
         a_evr_loop->cancel_timer(&(m_timer_obj));
 
-        //NDBG_PRINT("%sRUN_STATE_MACHINE%s: STATE[%d] --START\n", ANSI_COLOR_BG_YELLOW, ANSI_COLOR_OFF, m_state);
+        //NDBG_PRINT("%sRUN_STATE_MACHINE%s: STATE[%d] --START\n", ANSI_COLOR_BG_YELLOW, ANSI_COLOR_OFF, m_ssl_state);
 state_top:
-        //NDBG_PRINT("%sRUN_STATE_MACHINE%s: STATE[%d]\n", ANSI_COLOR_BG_YELLOW, ANSI_COLOR_OFF, m_state);
-        switch (m_state)
+        //NDBG_PRINT("%sRUN_STATE_MACHINE%s: STATE[%d]\n", ANSI_COLOR_BG_YELLOW, ANSI_COLOR_OFF, m_ssl_state);
+        switch (m_ssl_state)
         {
 
         // -------------------------------------------------
         // STATE: FREE
         // -------------------------------------------------
-        case CONN_STATE_FREE:
+        case SSL_STATE_FREE:
         {
                 int32_t l_status;
                 l_status = setup_socket(a_host_info);
@@ -585,6 +411,13 @@ state_top:
                 {
                         return STATUS_ERROR;
                 }
+
+                // Create SSL Context
+                m_ssl = SSL_new(m_ssl_ctx);
+                // TODO Check for NULL
+
+                SSL_set_fd(m_ssl, m_fd);
+                // TODO Check for Errors
 
                 // Get start time
                 // Stats
@@ -601,7 +434,7 @@ state_top:
                         return STATUS_ERROR;
                 }
 
-                m_state = CONN_STATE_CONNECTING;
+                m_ssl_state = SSL_STATE_CONNECTING;
                 goto state_top;
 
         }
@@ -609,14 +442,14 @@ state_top:
         // -------------------------------------------------
         // STATE: CONNECTING
         // -------------------------------------------------
-        case CONN_STATE_CONNECTING:
+        case SSL_STATE_CONNECTING:
         {
                 //int l_status;
                 //NDBG_PRINT("%sCNST_CONNECTING%s\n", ANSI_COLOR_BG_RED, ANSI_COLOR_OFF);
                 int l_connect_status = 0;
                 l_connect_status = connect(m_fd,
-                                (struct sockaddr*) &(a_host_info.m_sa),
-                                (a_host_info.m_sa_len));
+                                           (struct sockaddr*) &(a_host_info.m_sa),
+                                           (a_host_info.m_sa_len));
 
                 // TODO REMOVE
                 //++l_retry;
@@ -637,7 +470,7 @@ state_top:
                                 //                ANSI_COLOR_BG_CYAN, ANSI_COLOR_OFF,
                                 //                m_fd);
                                 // Ok!
-                                m_state = CONN_STATE_CONNECTED;
+                                m_ssl_state = SSL_STATE_CONNECTED;
                                 break;
                         }
                         case EINVAL:
@@ -666,7 +499,7 @@ state_top:
                         case EINPROGRESS:
                         {
                                 //NDBG_PRINT("Error Connection in progress. Reason: %s\n", strerror(errno));
-                                m_state = CONN_STATE_CONNECTING;
+                                m_ssl_state = SSL_STATE_CONNECTING;
                                 //l_in_progress = true;
 
                                 // Set to writeable and try again
@@ -704,7 +537,7 @@ state_top:
                         }
                 }
 
-                m_state = CONN_STATE_CONNECTED;
+                m_ssl_state = SSL_STATE_CONNECTED;
 
                 // Stats
                 if(m_collect_stats_flag)
@@ -721,17 +554,7 @@ state_top:
                 //              m_connect_start_time_us,
                 //              ANSI_COLOR_OFF);
 
-                // -------------------------------------------
-                // HTTPS
-                // -------------------------------------------
-                if (m_scheme == SCHEME_HTTP)
-                {
-                        // Nuttin...
-                }
-                else if(m_scheme == SCHEME_HTTPS)
-                {
-                        m_state = CONN_STATE_SSL_CONNECTING;
-                }
+                m_ssl_state = SSL_STATE_SSL_CONNECTING;
 
                 // -------------------------------------------
                 // Add to event handler
@@ -750,16 +573,16 @@ state_top:
         // -------------------------------------------------
         // STATE: SSL_CONNECTING
         // -------------------------------------------------
-        case CONN_STATE_SSL_CONNECTING:
-        case CONN_STATE_SSL_CONNECTING_WANT_WRITE:
-        case CONN_STATE_SSL_CONNECTING_WANT_READ:
+        case SSL_STATE_SSL_CONNECTING:
+        case SSL_STATE_SSL_CONNECTING_WANT_WRITE:
+        case SSL_STATE_SSL_CONNECTING_WANT_READ:
         {
                 int l_status;
                 //NDBG_PRINT("%sSSL_CONNECTING%s\n", ANSI_COLOR_BG_RED, ANSI_COLOR_OFF);
                 l_status = ssl_connect(a_host_info);
                 if(EAGAIN == l_status)
                 {
-                        if(CONN_STATE_SSL_CONNECTING_WANT_READ == m_state)
+                        if(SSL_STATE_SSL_CONNECTING_WANT_READ == m_ssl_state)
                         {
                                 if (0 != a_evr_loop->mod_fd(m_fd,
                                                             EVR_FILE_ATTR_MASK_READ|EVR_FILE_ATTR_MASK_STATUS_ERROR,
@@ -769,7 +592,7 @@ state_top:
                                         return STATUS_ERROR;
                                 }
                         }
-                        else if(CONN_STATE_SSL_CONNECTING_WANT_WRITE == m_state)
+                        else if(SSL_STATE_SSL_CONNECTING_WANT_WRITE == m_ssl_state)
                         {
                                 if (0 != a_evr_loop->mod_fd(m_fd,
                                                             EVR_FILE_ATTR_MASK_WRITE|EVR_FILE_ATTR_MASK_STATUS_ERROR,
@@ -804,7 +627,7 @@ state_top:
         // -------------------------------------------------
         // STATE: CONNECTED
         // -------------------------------------------------
-        case CONN_STATE_CONNECTED:
+        case SSL_STATE_CONNECTED:
         {
                 // -------------------------------------------
                 // Send request
@@ -823,7 +646,7 @@ state_top:
         // -------------------------------------------------
         // STATE: READING
         // -------------------------------------------------
-        case CONN_STATE_READING:
+        case SSL_STATE_READING:
         {
                 int l_read_status = 0;
                 //NDBG_PRINT("%sCNST_READING%s\n", ANSI_COLOR_BG_CYAN, ANSI_COLOR_OFF);
@@ -842,4 +665,68 @@ state_top:
 
         return STATUS_OK;
 }
-#endif
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t nconn_ssl::set_opt(uint32_t a_opt, void *a_buf, uint32_t a_len)
+{
+        // TODO RUN SUPER
+        int32_t l_status;
+        l_status = nconn_tcp::set_opt(a_opt, a_buf, a_len);
+        if((l_status != STATUS_OK) &&
+           (l_status != m_opt_unhandled))
+        {
+                return STATUS_ERROR;
+        }
+        if(l_status == STATUS_OK)
+        {
+                return STATUS_OK;
+        }
+
+        switch(a_opt)
+        {
+        default:
+        {
+                //NDBG_PRINT("Error unsupported option: %d\n", a_opt);
+                return m_opt_unhandled;
+        }
+        }
+
+        return STATUS_OK;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t nconn_ssl::get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len)
+{
+
+        // TODO RUN SUPER
+        int32_t l_status;
+        l_status = nconn_tcp::get_opt(a_opt, a_buf, a_len);
+        if((l_status != STATUS_OK) &&
+           (l_status != m_opt_unhandled))
+        {
+                return STATUS_ERROR;
+        }
+        if(l_status == STATUS_OK)
+        {
+                return STATUS_OK;
+        }
+
+        switch(a_opt)
+        {
+        default:
+        {
+                //NDBG_PRINT("Error unsupported option: %d\n", a_opt);
+                return m_opt_unhandled;
+        }
+        }
+
+        return STATUS_OK;
+}

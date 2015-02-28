@@ -48,6 +48,7 @@ SET(SRCS
     ./support/http_cb.cc
     ./support/parsed_url.cc
     ./support/reqlet.cc
+    ./support/nconn.cc
     ./support/nconn_tcp.cc
     ./support/nconn_ssl.cc
     ./support/resolver.cc

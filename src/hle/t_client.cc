@@ -444,6 +444,16 @@ nconn *t_client::create_new_nconn(uint32_t a_id, const reqlet &a_reqlet)
         //l_nconn->set_id(i_conn);
         //l_nconn->set_ssl_ctx(a_ssl_ctx);
 
+        if(a_reqlet.m_url.m_scheme == nconn::SCHEME_TCP)
+        {
+                // TODO SET OPTIONS!!!
+                l_nconn = new nconn_tcp(m_verbose, m_color, 1, true, false, NULL);
+        }
+        else if(a_reqlet.m_url.m_scheme == nconn::SCHEME_SSL)
+        {
+                // TODO SET OPTIONS!!!
+                l_nconn = new nconn_ssl(m_verbose, m_color, 1, true, false, NULL);
+        }
 
         return l_nconn;
 
@@ -555,10 +565,11 @@ int32_t t_client::create_request(nconn &ao_conn,
         uint32_t l_max_buf_len = nconn_tcp::m_max_req_buf;
         int32_t l_status;
 
-        l_status = ao_conn.get_opt(nconn_tcp::OPT_TCP_GET_GLOBAL_REQ_BUF, (void **)(&l_req_buf), &l_req_buf_len);
-        if(l_status != STATUS_OK)
+        l_status = ao_conn.get_opt(nconn_tcp::OPT_TCP_REQ_BUF, (void **)(&l_req_buf), &l_req_buf_len);
+        if((l_status != STATUS_OK) ||
+           (l_status == nconn::m_opt_unhandled))
         {
-                NDBG_PRINT("Error performing get_opt\n");
+                NDBG_PRINT("Error performing get_opt. Status: %d\n", l_status);
                 // TODO more info
                 return STATUS_ERROR;
         }
@@ -615,7 +626,7 @@ int32_t t_client::create_request(nconn &ao_conn,
         l_req_buf_len += snprintf(l_req_buf + l_req_buf_len, l_max_buf_len - l_req_buf_len, "\r\n");
 
         // Set len
-        l_status = ao_conn.set_opt(nconn_tcp::OPT_TCP_GET_GLOBAL_REQ_BUF_LEN, NULL, l_req_buf_len);
+        l_status = ao_conn.set_opt(nconn_tcp::OPT_TCP_REQ_BUF_LEN, NULL, l_req_buf_len);
         if(l_status != STATUS_OK)
         {
                 NDBG_PRINT("Error performing set_opt\n");
