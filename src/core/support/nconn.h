@@ -201,7 +201,7 @@ public:
         // -------------------------------------------------
         // Public members
         // -------------------------------------------------
-        // TODO hide this shit!
+        // TODO hide this!
         bool m_verbose;
         bool m_color;
         std::string m_host;
