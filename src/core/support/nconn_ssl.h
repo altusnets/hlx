@@ -64,9 +64,8 @@ public:
                   bool a_color,
                   int64_t a_max_reqs_per_conn = -1,
                   bool a_save_response_in_reqlet = false,
-                  bool a_collect_stats = false,
-                  void *a_rand_ptr = NULL):
-                          nconn_tcp(a_verbose, a_color, a_max_reqs_per_conn, a_save_response_in_reqlet, a_collect_stats, a_rand_ptr),
+                  bool a_collect_stats = false):
+                          nconn_tcp(a_verbose, a_color, a_max_reqs_per_conn, a_save_response_in_reqlet, a_collect_stats),
                           m_ssl_ctx(NULL),
                           m_ssl(NULL),
                           m_ssl_state(SSL_STATE_FREE)
@@ -86,6 +85,7 @@ public:
         int32_t get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len);
 
         bool is_done(void) { return (m_ssl_state == SSL_STATE_DONE);}
+        bool is_free(void) { return (m_ssl_state == SSL_STATE_FREE);}
         void set_state_done(void) { m_ssl_state = SSL_STATE_DONE; };
 
         // -------------------------------------------------

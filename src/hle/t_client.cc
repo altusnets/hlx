@@ -111,19 +111,6 @@ t_client::t_client(bool a_verbose,
 
         for(uint32_t i_conn = 0; i_conn < a_max_parallel_connections; ++i_conn)
         {
-#if 0
-                nconn *l_nconn = new nconn(m_verbose,
-                                m_color,
-                                m_sock_opt_recv_buf_size,
-                                m_sock_opt_send_buf_size,
-                                m_sock_opt_no_delay,
-                                true,
-                                false,
-                                m_timeout_s,
-                                1,
-                                NULL);
-#endif
-
                 m_nconn_vector[i_conn] = NULL;
                 m_conn_free_list.push_back(i_conn);
         }
@@ -444,18 +431,17 @@ nconn *t_client::create_new_nconn(uint32_t a_id, const reqlet &a_reqlet)
         if(a_reqlet.m_url.m_scheme == nconn::SCHEME_TCP)
         {
                 // TODO SET OPTIONS!!!
-                l_nconn = new nconn_tcp(m_verbose, m_color, 1, true, false, NULL);
+                l_nconn = new nconn_tcp(m_verbose, m_color, 1, true, false);
         }
         else if(a_reqlet.m_url.m_scheme == nconn::SCHEME_SSL)
         {
                 // TODO SET OPTIONS!!!
-                l_nconn = new nconn_ssl(m_verbose, m_color, 1, true, false, NULL);
+                l_nconn = new nconn_ssl(m_verbose, m_color, 1, true, false);
         }
 
         return l_nconn;
 
 }
-
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -568,10 +554,6 @@ int32_t t_client::start_connections(void)
 int32_t t_client::create_request(nconn &ao_conn,
                                  reqlet &a_reqlet)
 {
-
-
-
-
         // Get client
         char *l_req_buf = NULL;
         uint32_t l_req_buf_len = 0;

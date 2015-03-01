@@ -96,8 +96,7 @@ public:
               bool a_color,
               int64_t a_max_reqs_per_conn = -1,
               bool a_save_response_in_reqlet = false,
-              bool a_collect_stats = false,
-              void *a_rand_ptr = NULL):
+              bool a_collect_stats = false):
                 m_verbose(a_verbose),
                 m_color(a_color),
                 m_host(),
@@ -157,6 +156,7 @@ public:
 
         virtual void set_state_done(void) = 0;
         virtual bool is_done(void) = 0;
+        virtual bool is_free(void) = 0;
 
         // -------------------------------------------------
         // Public static methods

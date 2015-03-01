@@ -69,9 +69,8 @@ public:
                   bool a_color,
                   int64_t a_max_reqs_per_conn = -1,
                   bool a_save_response_in_reqlet = false,
-                  bool a_collect_stats = false,
-                  void *a_rand_ptr = NULL):
-                          nconn(a_verbose, a_color, a_max_reqs_per_conn, a_save_response_in_reqlet, a_collect_stats, a_rand_ptr),
+                  bool a_collect_stats = false):
+                          nconn(a_verbose, a_color, a_max_reqs_per_conn, a_save_response_in_reqlet, a_collect_stats),
                           m_tcp_state(TCP_STATE_FREE),
                           m_fd(-1),
                           m_http_parser_settings(),
@@ -111,6 +110,7 @@ public:
         int32_t get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len);
 
         bool is_done(void) { return (m_tcp_state == TCP_STATE_DONE);}
+        bool is_free(void) { return (m_tcp_state == TCP_STATE_FREE);}
         void set_state_done(void) { m_tcp_state = TCP_STATE_DONE; };
 
         // -------------------------------------------------

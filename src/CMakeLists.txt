@@ -25,8 +25,6 @@ cmake_minimum_required(VERSION 2.8.0)
 
 # include source and test directories
 add_subdirectory(core)
-#add_subdirectory(hlo)
+add_subdirectory(hlo)
 add_subdirectory(hle)
-#add_subdirectory(hlp)
-#add_subdirectory(slo)
-
+add_subdirectory(hlp)

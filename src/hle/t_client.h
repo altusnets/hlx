@@ -35,7 +35,6 @@
 #include "ndebug.h"
 #include "util.h"
 
-
 #include <map>
 #include <vector>
 #include <list>
