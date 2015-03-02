@@ -510,12 +510,20 @@ state_top:
                 // -------------------------------------------
                 int32_t l_request_status = STATUS_OK;
                 //NDBG_PRINT("%sSEND_REQUEST%s\n", ANSI_COLOR_BG_CYAN, ANSI_COLOR_OFF);
-                l_request_status = send_request(false);
-                if(l_request_status != STATUS_OK)
-                {
-                        NDBG_PRINT("Error: performing send_request\n");
-                        return STATUS_ERROR;
-                }
+        	if(!m_connect_only)
+        	{
+			l_request_status = send_request(false);
+			if(l_request_status != STATUS_OK)
+			{
+				NDBG_PRINT("Error: performing send_request\n");
+				return STATUS_ERROR;
+			}
+        	}
+        	// connect only -we outtie!
+        	else
+        	{
+        		m_tcp_state = TCP_STATE_DONE;
+        	}
                 break;
         }
 

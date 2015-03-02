@@ -54,20 +54,41 @@ public:
         // ---------------------------------------
         typedef enum ssl_opt_enum
         {
-                OPT_SSL_CIPHER_STR = 1000,
-                OPT_SSL_CTX = 1001,
+                OPT_SSL_CTX = 1000,
+
+                // Settings
+                OPT_SSL_CIPHER_STR = 1001,
+
+                // Verify options
+                OPT_SSL_VERIFY = 1100,
+                OPT_SSL_CA_FILE = 1101,
+                OPT_SSL_CA_PATH = 1102,
 
                 OPT_SSL_SENTINEL = 1999
+
         } ssl_opt_t;
 
         nconn_ssl(bool a_verbose,
                   bool a_color,
                   int64_t a_max_reqs_per_conn = -1,
                   bool a_save_response_in_reqlet = false,
-                  bool a_collect_stats = false):
-                          nconn_tcp(a_verbose, a_color, a_max_reqs_per_conn, a_save_response_in_reqlet, a_collect_stats),
+                  bool a_collect_stats = false,
+                  bool a_connect_only = false):
+                          nconn_tcp(a_verbose,
+                        	    a_color,
+                        	    a_max_reqs_per_conn,
+                        	    a_save_response_in_reqlet,
+                        	    a_collect_stats,
+                        	    a_connect_only),
                           m_ssl_ctx(NULL),
                           m_ssl(NULL),
+                          m_ssl_opt_verify(false),
+                          m_ssl_opt_verify_allow_self_signed(true),
+                          m_ssl_opt_tlsext_hostname(""),
+                          m_ssl_opt_ca_file(""),
+                          m_ssl_opt_ca_path(""),
+                          m_ssl_opt_options(0),
+                          m_ssl_opt_cipher_list_str(""),
                           m_ssl_state(SSL_STATE_FREE)
           {
 
@@ -124,6 +145,8 @@ private:
 
         int32_t ssl_connect(const host_info_t &a_host_info);
         int32_t receive_response(void);
+        int32_t init(void);
+        int32_t validate_server_certificate(const char* a_host, bool a_disallow_self_signed);
 
         // -------------------------------------------------
         // Private members
@@ -131,6 +154,13 @@ private:
         // ssl
         SSL_CTX * m_ssl_ctx;
         SSL *m_ssl;
+        bool m_ssl_opt_verify;
+        bool m_ssl_opt_verify_allow_self_signed;
+        std::string m_ssl_opt_tlsext_hostname;
+        std::string m_ssl_opt_ca_file;
+        std::string m_ssl_opt_ca_path;
+        long m_ssl_opt_options;
+        std::string m_ssl_opt_cipher_list_str;
 
         ssl_state_t m_ssl_state;
 

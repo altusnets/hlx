@@ -45,6 +45,7 @@ SET(SRCS
     ./cityhash/city.cc
     ./support/util.cc
     ./support/ssl_util.cc
+    ./support/hostcheck.cc
     ./support/http_cb.cc
     ./support/parsed_url.cc
     ./support/reqlet.cc

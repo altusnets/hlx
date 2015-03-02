@@ -27,6 +27,7 @@
 #include "nconn_ssl.h"
 #include "util.h"
 #include "evr.h"
+#include "hostcheck.h"
 
 #include <errno.h>
 #include <string.h>
@@ -56,7 +57,7 @@
 #include <openssl/bio.h>
 #include <openssl/rand.h>
 #include <openssl/crypto.h>
-
+#include <openssl/x509v3.h>
 
 //: ----------------------------------------------------------------------------
 //: Macros
@@ -66,6 +67,9 @@
 //: ----------------------------------------------------------------------------
 //: Fwd Decl's
 //: ----------------------------------------------------------------------------
+static int ssl_cert_verify_callback(int ok, X509_STORE_CTX* store);
+static int ssl_cert_verify_callback_allow_self_signed(int ok, X509_STORE_CTX* store);
+static bool ssl_x509_get_ids(X509* x509, std::vector<std::string>& ids);
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -386,6 +390,69 @@ int32_t nconn_ssl::cleanup(evr_loop *a_evr_loop)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+int32_t nconn_ssl::init(void)
+{
+
+        // Create SSL Context
+        m_ssl = SSL_new(m_ssl_ctx);
+        // TODO Check for NULL
+
+        SSL_set_fd(m_ssl, m_fd);
+        // TODO Check for Errors
+
+        const long l_ssl_options = m_ssl_opt_options;
+        if (l_ssl_options)
+        {
+                // clear all options and set specified options
+                SSL_clear_options(m_ssl, 0x11111111L);
+                if (l_ssl_options != SSL_set_options(m_ssl, l_ssl_options))
+                {
+                        NDBG_PRINT("Failed to set SSL options: %ld", l_ssl_options);
+                        return STATUS_ERROR;
+                }
+        }
+
+        if (!m_ssl_opt_cipher_list_str.empty())
+        {
+                if (1 != SSL_set_cipher_list(m_ssl, m_ssl_opt_cipher_list_str.c_str()))
+                {
+                	NDBG_PRINT("Failed to set ssl cipher list: %s", m_ssl_opt_cipher_list_str.c_str());
+                        return STATUS_ERROR;
+                }
+        }
+
+        // Set tls sni extension
+        if (!m_ssl_opt_tlsext_hostname.empty())
+        {
+                // const_cast to work around SSL's use of arg -this call does not change buffer argument
+                if (1 != SSL_set_tlsext_host_name(m_ssl, m_ssl_opt_tlsext_hostname.c_str()))
+                {
+                	NDBG_PRINT("Failed to set tls hostname: %s", m_ssl_opt_tlsext_hostname.c_str());
+                        return false;
+                }
+        }
+
+        // Set SSL Cert verify callback ...
+        if (m_ssl_opt_verify)
+        {
+                if (m_ssl_opt_verify_allow_self_signed)
+                {
+                        SSL_set_verify(m_ssl, SSL_VERIFY_PEER, ssl_cert_verify_callback_allow_self_signed);
+                }
+                else
+                {
+                        SSL_set_verify(m_ssl, SSL_VERIFY_PEER, ssl_cert_verify_callback);
+                }
+        }
+
+	return STATUS_OK;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
 int32_t nconn_ssl::run_state_machine(evr_loop *a_evr_loop, const host_info_t &a_host_info)
 {
 
@@ -414,12 +481,11 @@ state_top:
 
                 //NDBG_PRINT("m_ssl_ctx: %p\n", m_ssl_ctx);
 
-                // Create SSL Context
-                m_ssl = SSL_new(m_ssl_ctx);
-                // TODO Check for NULL
-
-                SSL_set_fd(m_ssl, m_fd);
-                // TODO Check for Errors
+                l_status = init();
+                if(l_status != STATUS_OK)
+                {
+                        return STATUS_ERROR;
+                }
 
                 // Get start time
                 // Stats
@@ -631,17 +697,35 @@ state_top:
         // -------------------------------------------------
         case SSL_STATE_CONNECTED:
         {
+
+        	int32_t l_status = 0;
+        	// Do verify
+        	char *l_hostname = NULL;
+        	l_status = validate_server_certificate(l_hostname, (!m_ssl_opt_verify_allow_self_signed));
+        	if(l_status != STATUS_OK)
+        	{
+        		return STATUS_ERROR;
+        	}
+
                 // -------------------------------------------
                 // Send request
                 // -------------------------------------------
-                int32_t l_request_status = STATUS_OK;
-                //NDBG_PRINT("%sSEND_REQUEST%s\n", ANSI_COLOR_BG_CYAN, ANSI_COLOR_OFF);
-                l_request_status = send_request(false);
-                if(l_request_status != STATUS_OK)
-                {
-                        NDBG_PRINT("Error: performing send_request\n");
-                        return STATUS_ERROR;
-                }
+        	if(!m_connect_only)
+        	{
+			int32_t l_request_status = STATUS_OK;
+			//NDBG_PRINT("%sSEND_REQUEST%s\n", ANSI_COLOR_BG_CYAN, ANSI_COLOR_OFF);
+			l_request_status = send_request(false);
+			if(l_request_status != STATUS_OK)
+			{
+				NDBG_PRINT("Error: performing send_request\n");
+				return STATUS_ERROR;
+			}
+        	}
+        	// connect only -we outtie!
+        	else
+        	{
+        		m_ssl_state = SSL_STATE_DONE;
+        	}
                 break;
         }
 
@@ -745,3 +829,227 @@ int32_t nconn_ssl::get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len)
 
         return STATUS_OK;
 }
+
+// -------------------------------------------
+// Check host name
+// Based on example from:
+// "Network Security with OpenSSL" pg. 135-136
+// Returns 0 on Success, -1 on Failure
+// -------------------------------------------
+static int validate_server_certificate_hostname(X509* a_cert, const char* a_host)
+{
+        typedef std::vector <std::string> cert_name_list_t;
+        cert_name_list_t l_cert_name_list;
+        bool l_get_ids_status = false;
+
+        l_get_ids_status = ssl_x509_get_ids(a_cert, l_cert_name_list);
+        if(!l_get_ids_status)
+        {
+                // No names found bail out
+                NDBG_PRINT("host[%s]: ssl_x509_get_ids returned no names.", a_host);
+                return -1;
+        }
+
+        for(uint32_t i_name = 0; i_name < l_cert_name_list.size(); ++i_name)
+        {
+                if(Curl_cert_hostcheck(l_cert_name_list[i_name].c_str(), a_host))
+                {
+                        return 0;
+                }
+        }
+
+        NDBG_PRINT("host[%s]: Hostname match failed.", a_host);
+        return -1;
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: \notes:   Based on example from "Network Security with OpenSSL" pg. 132
+//: ----------------------------------------------------------------------------
+int32_t nconn_ssl::validate_server_certificate(const char* a_host, bool a_disallow_self_signed)
+{
+        X509* l_cert = NULL;
+
+        // Get certificate
+        l_cert = SSL_get_peer_certificate(m_ssl);
+        if(NULL == l_cert)
+        {
+                NDBG_PRINT("host[%s]: SSL_get_peer_certificate error.  ssl: %p", a_host, m_ssl);
+                return -1;
+        }
+
+        // Example of displaying cert
+        //X509_print_fp(stdout, l_cert);
+
+        // Check host name
+        if(a_host)
+        {
+                int l_status = 0;
+                l_status = validate_server_certificate_hostname(l_cert, a_host);
+                if(0 != l_status)
+                {
+                        if(NULL != l_cert)
+                        {
+                                X509_free(l_cert);
+                                l_cert = NULL;
+                        }
+                        return -1;
+                }
+        }
+
+        if(NULL != l_cert)
+        {
+                X509_free(l_cert);
+                l_cert = NULL;
+        }
+
+        long l_ssl_verify_result;
+        l_ssl_verify_result = SSL_get_verify_result(m_ssl);
+        if(X509_V_OK != l_ssl_verify_result)
+        {
+
+                // Check for self-signed failures
+                //a_disallow_self_signed
+                if(false == a_disallow_self_signed)
+                {
+                        if ((l_ssl_verify_result == X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT) ||
+                            (l_ssl_verify_result == X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN))
+                        {
+                                // No errors return success(0)
+                                if(NULL != l_cert)
+                                {
+                                        X509_free(l_cert);
+                                        l_cert = NULL;
+                                }
+                                return 0;
+                        }
+                }
+
+                NDBG_PRINT("SSL_get_verify_result[%ld]: %s\n",
+                      l_ssl_verify_result,
+                      X509_verify_cert_error_string(l_ssl_verify_result));
+                if(NULL != l_cert)
+                {
+                        X509_free(l_cert);
+                        l_cert = NULL;
+                }
+                return -1;
+        }
+
+        // No errors return success(0)
+        return STATUS_OK;
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: \notes:   Based on example from "Network Security with OpenSSL" pg. 132
+//: ----------------------------------------------------------------------------
+int ssl_cert_verify_callback_allow_self_signed(int ok, X509_STORE_CTX* store)
+{
+        if (!ok)
+        {
+                if(store)
+                {
+                        // TODO Can add check for depth here.
+                        //int depth = X509_STORE_CTX_get_error_depth(store);
+
+                        int err = X509_STORE_CTX_get_error(store);
+                        if ((err == X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT) ||
+                            (err == X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN))
+                        {
+                                // Return success despite self-signed
+                                return 1;
+                        }
+                        else
+                        {
+                                NDBG_PRINT("ssl_cert_verify_callback_allow_self_signed Error[%d].  Reason: %s",
+                                      err, X509_verify_cert_error_string(err));
+                        }
+                }
+        }
+        return ok;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: \notes:   Based on example from "Network Security with OpenSSL" pg. 132
+//: ----------------------------------------------------------------------------
+int ssl_cert_verify_callback(int ok, X509_STORE_CTX* store)
+{
+        if (!ok)
+        {
+                if(store)
+                {
+                        // TODO Can add check for depth here.
+                        //int depth = X509_STORE_CTX_get_error_depth(store);
+
+                        int err = X509_STORE_CTX_get_error(store);
+                        NDBG_PRINT("ssl_cert_verify_callback Error[%d].  Reason: %s",
+                              err, X509_verify_cert_error_string(err));
+
+                }
+        }
+        return ok;
+}
+
+
+//: ----------------------------------------------------------------------------
+//: \details: Return an array of (RFC 6125 coined) DNS-IDs and CN-IDs in a x509
+//:           certificate
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+bool ssl_x509_get_ids(X509* x509, std::vector<std::string>& ids)
+{
+        if (!x509)
+                return false;
+
+        // First, the DNS-IDs (dNSName entries in the subjectAltName extension)
+        GENERAL_NAMES* names =
+                (GENERAL_NAMES*)X509_get_ext_d2i(x509, NID_subject_alt_name, NULL, NULL);
+        if (names)
+        {
+                std::string san;
+                for (int i = 0; i < sk_GENERAL_NAME_num(names); i++)
+                {
+                        GENERAL_NAME* name = sk_GENERAL_NAME_value(names, i);
+
+                        if (name->type == GEN_DNS)
+                        {
+                                san.assign(reinterpret_cast<char*>(ASN1_STRING_data(name->d.uniformResourceIdentifier)),
+                                           ASN1_STRING_length(name->d.uniformResourceIdentifier));
+                                if (!san.empty())
+                                        ids.push_back(san);
+                        }
+                }
+        }
+
+        if (names)
+                sk_GENERAL_NAME_pop_free(names, GENERAL_NAME_free);
+
+        // Second, the CN-IDs (commonName attributes in the subject DN)
+        X509_NAME* subj = X509_get_subject_name(x509);
+        int i = -1;
+        while ((i = X509_NAME_get_index_by_NID(subj, NID_commonName, i)) != -1)
+        {
+                ASN1_STRING* name = X509_NAME_ENTRY_get_data(X509_NAME_get_entry(subj, i));
+
+                std::string dn(reinterpret_cast<char*>(ASN1_STRING_data(name)),
+                               ASN1_STRING_length(name));
+                if (!dn.empty())
+                        ids.push_back(dn);
+        }
+
+        return ids.empty() ? false : true;
+}
+
+
+

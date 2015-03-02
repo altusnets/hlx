@@ -200,9 +200,12 @@ static void init_ssl_locking(void)
 //: \return:  ctx on success, NULL on failure
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-SSL_CTX* ssl_init(const std::string &a_cipher_list)
+SSL_CTX* ssl_init(const std::string &a_cipher_list,
+		  long a_options,
+		  const std::string &a_ca_file,
+		  const std::string &a_ca_path)
 {
-        SSL_CTX *server_ctx;
+        SSL_CTX *l_server_ctx;
 
         // Initialize the OpenSSL library
         SSL_library_init();
@@ -214,7 +217,6 @@ SSL_CTX* ssl_init(const std::string &a_cipher_list)
         // TODO Deprecated???
         //SSLeay_add_ssl_algorithms();
         OpenSSL_add_all_algorithms();
-
 
         // Set up for thread safety
         init_ssl_locking();
@@ -237,17 +239,18 @@ SSL_CTX* ssl_init(const std::string &a_cipher_list)
         }
 #endif
 
-        server_ctx = SSL_CTX_new(SSLv23_client_method()); /* Create new context */
-        if (server_ctx == NULL)
+        // TODO Make configurable
+        l_server_ctx = SSL_CTX_new(SSLv23_client_method()); /* Create new context */
+        if (l_server_ctx == NULL)
         {
                 ERR_print_errors_fp(stderr);
                 NDBG_PRINT("SSL_CTX_new Error: %s\n", ERR_error_string(ERR_get_error(), NULL));
                 return NULL;
         }
 
-        if (a_cipher_list.size() > 0)
+        if (!a_cipher_list.empty())
         {
-                if (! SSL_CTX_set_cipher_list(server_ctx, a_cipher_list.c_str()))
+                if (! SSL_CTX_set_cipher_list(l_server_ctx, a_cipher_list.c_str()))
                 {
                         NDBG_PRINT("Error cannot set m_cipher list\n");
                         ERR_print_errors_fp(stderr);
@@ -256,22 +259,48 @@ SSL_CTX* ssl_init(const std::string &a_cipher_list)
                 }
         }
 
-
-#if 0
-        if (!SSL_CTX_load_verify_locations(ctx,
-                        DEFAULT_PEM_FILE,
-                        NULL))
+        const char *l_ca_file = NULL;
+        const char *l_ca_path = NULL;
+        if(!a_ca_file.empty())
         {
-                fprintf(stderr, "Error loading trust store\n");
-                ERR_print_errors_fp(stderr);
-                SSL_CTX_free(ctx);
-                ctx = NULL;
+        	l_ca_file = a_ca_file.c_str();
         }
-#endif
+        else if(!a_ca_path.empty())
+        {
+        	l_ca_path = a_ca_path.c_str();
+        }
+
+        int32_t l_status;
+        if(l_ca_file || l_ca_path)
+        {
+		l_status = SSL_CTX_load_verify_locations(l_server_ctx, l_ca_file, l_ca_path);
+		if(1 != l_status)
+		{
+			ERR_print_errors_fp(stdout);
+			NDBG_PRINT("Error performing SSL_CTX_load_verify_locations.  Reason: %s",
+					ERR_error_string(ERR_get_error(), NULL));
+			SSL_CTX_free(l_server_ctx);
+			return NULL;
+		}
+
+		l_status = SSL_CTX_set_default_verify_paths(l_server_ctx);
+		if(1 != l_status)
+		{
+			ERR_print_errors_fp(stdout);
+			NDBG_PRINT("Error performing SSL_CTX_set_default_verify_paths.  Reason: %s",
+					ERR_error_string(ERR_get_error(), NULL));
+			SSL_CTX_free(l_server_ctx);
+			return NULL;
+		}
+        }
+
+        if(a_options)
+        {
+		// disable tls 1.1 and 1.2 support
+		SSL_CTX_set_options(l_server_ctx, a_options);
+        }
+
 
         //NDBG_PRINT("SSL_CTX_new success\n");
-
-        return server_ctx;
-
+        return l_server_ctx;
 }
-

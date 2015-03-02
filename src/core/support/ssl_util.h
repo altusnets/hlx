@@ -32,7 +32,10 @@
 //: ----------------------------------------------------------------------------
 //: Fwd Decl's
 //: ----------------------------------------------------------------------------
-SSL_CTX* ssl_init(const std::string &a_cipher_list);
+SSL_CTX* ssl_init(const std::string &a_cipher_list,
+		  long a_options = 0,
+		  const std::string &a_ca_file = "",
+		  const std::string &a_ca_path = "");
 void ssl_kill_locks(void);
 
 #endif

@@ -96,7 +96,8 @@ public:
               bool a_color,
               int64_t a_max_reqs_per_conn = -1,
               bool a_save_response_in_reqlet = false,
-              bool a_collect_stats = false):
+              bool a_collect_stats = false,
+              bool a_connect_only = false):
                 m_verbose(a_verbose),
                 m_color(a_color),
                 m_host(),
@@ -111,7 +112,8 @@ public:
                 m_timer_obj(NULL),
                 m_id(0),
                 m_max_reqs_per_conn(a_max_reqs_per_conn),
-                m_num_reqs(0)
+                m_num_reqs(0),
+                m_connect_only(a_connect_only)
         {
                 // Set stats
                 if(m_collect_stats_flag)
@@ -197,7 +199,7 @@ protected:
         // -------------------------------------------------
         int64_t m_max_reqs_per_conn;
         int64_t m_num_reqs;
-
+        bool m_connect_only;
 };
 
 
