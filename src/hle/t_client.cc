@@ -25,7 +25,6 @@
 //: Includes
 //: ----------------------------------------------------------------------------
 #include "t_client.h"
-#include "hle.h"
 #include "reqlet_repo.h"
 #include "nconn_ssl.h"
 #include "nconn_tcp.h"

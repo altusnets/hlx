@@ -43,14 +43,12 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}
 SET(SRCS
   main.cc
   t_client.cc
-  hle.cc
   reqlet_repo.cc
 )
 
 # Headers
 SET(HDRS
   t_client.h
-  hle.h
 )
 
 # ============================================================

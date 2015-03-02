@@ -24,11 +24,13 @@
 //: ----------------------------------------------------------------------------
 //: Includes
 //: ----------------------------------------------------------------------------
-#include "hle.h"
 #include "util.h"
 #include "reqlet_repo.h"
 #include "ndebug.h"
 #include "resolver.h"
+#include "t_client.h"
+#include "reqlet.h"
+#include "ssl_util.h"
 
 #include <string.h>
 
@@ -73,10 +75,26 @@
 
 #define MAX_READLINE_SIZE 1024
 
+
+// Version
+#define HLE_VERSION_MAJOR 0
+#define HLE_VERSION_MINOR 0
+#define HLE_VERSION_MACRO 1
+#define HLE_VERSION_PATCH "alpha"
+
+#define HLE_DEFAULT_CONN_TIMEOUT_S 10
+
+//: ----------------------------------------------------------------------------
+//: Macros
+//: ----------------------------------------------------------------------------
+#define SET_HEADER(_key, _val) l_settings.m_header_map[_key] =_val
+
 //: ----------------------------------------------------------------------------
 //: Types
 //: ----------------------------------------------------------------------------
-
+typedef std::list <std::string> host_list_t;
+typedef std::list <t_client *> t_client_list_t;
+typedef std::map <std::string, std::string> header_map_t;
 
 //: ----------------------------------------------------------------------------
 //: Settings
@@ -88,38 +106,70 @@ typedef struct settings_struct
         bool m_quiet;
         bool m_show_stats;
 
+        // request options
+        std::string m_url;
+        header_map_t m_header_map;
+
+        // run options
+        t_client_list_t m_t_client_list;
+        evr_loop_type_t m_evr_loop_type;
+        int32_t m_start_parallel;
+        uint32_t m_num_threads;
+        uint32_t m_timeout_s;
+
+        // tcp options
+        uint32_t m_sock_opt_recv_buf_size;
+        uint32_t m_sock_opt_send_buf_size;
+        bool m_sock_opt_no_delay;
+
+        // SSL options
+        SSL_CTX* m_ssl_ctx;
+        std::string m_cipher_list_str;
+
         // ---------------------------------
         // Defaults...
         // ---------------------------------
-        settings_struct() :
+        settings_struct(void) :
                 m_verbose(false),
                 m_color(false),
                 m_quiet(false),
-                m_show_stats(false)
+                m_show_stats(false),
+                m_url(),
+                m_header_map(),
+                m_t_client_list(),
+                m_evr_loop_type(EVR_LOOP_EPOLL),
+                m_start_parallel(100),
+                m_num_threads(4),
+                m_timeout_s(HLE_DEFAULT_CONN_TIMEOUT_S),
+                m_sock_opt_recv_buf_size(0),
+                m_sock_opt_send_buf_size(0),
+                m_sock_opt_no_delay(false),
+                m_ssl_ctx(NULL),
+                m_cipher_list_str("")
         {}
 
+private:
+        DISALLOW_COPY_AND_ASSIGN(settings_struct);
+
 } settings_struct_t;
-
-// ---------------------------------------------------------
-// Structure of arguments to pass to client thread
-// ---------------------------------------------------------
-typedef struct thread_args_struct
-{
-        t_client_list_t m_t_client_list;
-        settings_struct m_settings;
-
-        thread_args_struct() :
-                m_t_client_list(),
-                m_settings()
-        {};
-
-} thread_args_struct_t;
 
 //: ----------------------------------------------------------------------------
 //: Forward Decls
 //: ----------------------------------------------------------------------------
-void command_exec(thread_args_struct_t &a_thread_args);
+struct ssl_ctx_st;
+typedef ssl_ctx_st SSL_CTX;
+
+//: ----------------------------------------------------------------------------
+//: Prototypes
+//: ----------------------------------------------------------------------------
+void command_exec(settings_struct_t &a_settings);
 int32_t add_line(FILE *a_file_ptr, host_list_t &a_host_list);
+int32_t set_header(const std::string &a_header_key, const std::string &a_header_val);
+
+int32_t run(settings_struct_t &a_settings, host_list_t &a_host_list);
+bool is_running(settings_struct_t &a_settings);
+int32_t stop(settings_struct_t &a_settings);
+int32_t wait_till_stopped(settings_struct_t &a_settings);
 
 //: ----------------------------------------------------------------------------
 //: \details: Signal handler
@@ -128,6 +178,7 @@ int32_t add_line(FILE *a_file_ptr, host_list_t &a_host_list);
 //: ----------------------------------------------------------------------------
 bool g_test_finished = false;
 bool g_cancelled = false;
+settings_struct *g_settings = NULL;
 
 void sig_handler(int signo)
 {
@@ -137,7 +188,7 @@ void sig_handler(int signo)
                 //NDBG_PRINT("SIGINT\n");
                 g_test_finished = true;
                 g_cancelled = true;
-                hle::get()->stop();
+                stop(*g_settings);
         }
 }
 
@@ -185,7 +236,6 @@ void print_usage(FILE* a_stream, int a_exit_code)
         fprintf(a_stream, "  \n");
 
         fprintf(a_stream, "Settings:\n");
-        fprintf(a_stream, "  -y, --cipher         Cipher --see \"openssl ciphers\" for list.\n");
         fprintf(a_stream, "  -p, --parallel       Num parallel.\n");
         fprintf(a_stream, "  -t, --threads        Number of parallel threads.\n");
         fprintf(a_stream, "  -H, --header         Request headers -can add multiple ie -H<> -H<>...\n");
@@ -196,6 +246,10 @@ void print_usage(FILE* a_stream, int a_exit_code)
         fprintf(a_stream, "  -A, --ai_cache       Path to Address Info Cache (DNS lookup cache).\n");
         fprintf(a_stream, "  \n");
 
+        fprintf(a_stream, "SSL Settings:\n");
+        fprintf(a_stream, "  -y, --cipher         Cipher --see \"openssl ciphers\" for list.\n");
+        fprintf(a_stream, "  \n");
+
         fprintf(a_stream, "Print Options:\n");
         fprintf(a_stream, "  -r, --verbose        Verbose logging\n");
         fprintf(a_stream, "  -c, --color          Color\n");
@@ -204,6 +258,7 @@ void print_usage(FILE* a_stream, int a_exit_code)
         fprintf(a_stream, "  \n");
 
         fprintf(a_stream, "Output Options: -defaults to line delimited\n");
+        fprintf(a_stream, "  -o, --output         File to write output to. Defaults to stdout\n");
         fprintf(a_stream, "  -l, --line_delimited Output <HOST> <RESPONSE BODY> per line\n");
         fprintf(a_stream, "  -j, --json           JSON { <HOST>: \"body\": <RESPONSE> ...\n");
         fprintf(a_stream, "  -P, --pretty         Pretty output\n");
@@ -229,20 +284,23 @@ void print_usage(FILE* a_stream, int a_exit_code)
 //: ----------------------------------------------------------------------------
 int main(int argc, char** argv)
 {
-        // Get hlo instance
-        hle *l_hle = hle::get();
+
+        settings_struct_t l_settings;
+
+        // For sighandler
+        g_settings = &l_settings;
 
         // -------------------------------------------
         // Setup default headers before the user
         // -------------------------------------------
-        l_hle->set_header("User-Agent", "EdgeCast Parallel Curl hle ");
-        //l_hlo->set_header("User-Agent", "ONGA_BONGA (╯°□°）╯︵ ┻━┻)");
-        //l_hlo->set_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/33.0.1750.117 Safari/537.36");
-        //l_hlo->set_header("x-select-backend", "self");
-        l_hle->set_header("Accept", "*/*");
-        //l_hlo->set_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
-        //l_hlo->set_header("Accept-Encoding", "gzip,deflate");
-        //l_hlo->set_header("Connection", "keep-alive");
+        SET_HEADER("User-Agent", "EdgeCast Parallel Curl hle ");
+        //SET_HEADER("User-Agent", "ONGA_BONGA (╯°□°）╯︵ ┻━┻)");
+        //SET_HEADER("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/33.0.1750.117 Safari/537.36");
+        //SET_HEADER("x-select-backend", "self");
+        SET_HEADER("Accept", "*/*");
+        //SET_HEADER("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
+        //SET_HEADER("Accept-Encoding", "gzip,deflate");
+        //SET_HEADER("Connection", "keep-alive");
 
         // -------------------------------------------
         // Get args...
@@ -270,6 +328,7 @@ int main(int argc, char** argv)
                 { "color",          0, 0, 'c' },
                 { "quiet",          0, 0, 'q' },
                 { "show_progress",  0, 0, 's' },
+                { "output",         1, 0, 'o' },
                 { "line_delimited", 0, 0, 'l' },
                 { "json",           0, 0, 'j' },
                 { "pretty",         0, 0, 'P' },
@@ -279,14 +338,12 @@ int main(int argc, char** argv)
                 { 0, 0, 0, 0 }
         };
 
-        settings_struct_t l_settings;
-        thread_args_struct_t l_thread_args;
-
         std::string l_gprof_file;
         std::string l_execute_line;
         std::string l_host_file_str;
         std::string l_url;
         std::string l_ai_cache;
+        std::string l_output_file = "";
 
         // Defaults
         reqlet_repo::output_type_t l_output_mode = reqlet_repo::OUTPUT_JSON;
@@ -328,7 +385,7 @@ int main(int argc, char** argv)
         // -------------------------------------------------
         // Args...
         // -------------------------------------------------
-        char l_short_arg_list[] = "hvu:f:x:y:p:t:H:T:R:S:DA:rcqsljPG:";
+        char l_short_arg_list[] = "hvu:f:x:y:p:t:H:T:R:S:DA:rcqso:ljPG:";
         while ((l_opt = getopt_long_only(argc, argv, l_short_arg_list, l_long_options, &l_option_index)) != -1)
         {
 
@@ -377,7 +434,6 @@ int main(int argc, char** argv)
                         break;
                 }
 
-
                 // ---------------------------------------
                 // Execute line
                 // ---------------------------------------
@@ -399,7 +455,8 @@ int main(int argc, char** argv)
                                 l_cipher_str = "DES-CBC3-SHA";
                         else if (strcasecmp(l_cipher_str.c_str(), "paranoid") == 0)
                                 l_cipher_str = "AES256-SHA";
-                        l_hle->set_cipher_list(l_cipher_str);
+
+                        l_settings.m_cipher_list_str = l_cipher_str;
                         break;
                 }
 
@@ -417,7 +474,7 @@ int main(int argc, char** argv)
                                 printf("parallel must be at least 1\n");
                                 print_usage(stdout, -1);
                         }
-                        l_hle->set_start_parallel(l_start_parallel);
+                        l_settings.m_start_parallel = l_start_parallel;
                         break;
                 }
 
@@ -434,8 +491,7 @@ int main(int argc, char** argv)
                                 printf("num-threads must be at least 1\n");
                                 print_usage(stdout, -1);
                         }
-
-                        l_hle->set_num_threads(l_max_threads);
+                        l_settings.m_num_threads = l_max_threads;
                         break;
                 }
 
@@ -455,7 +511,7 @@ int main(int argc, char** argv)
                         }
 
                         // Add to reqlet_repo map
-                        l_hle->set_header(l_header_key, l_header_val);
+                        SET_HEADER(l_header_key, l_header_val);
                         // TODO Check status???
                         break;
                 }
@@ -473,8 +529,7 @@ int main(int argc, char** argv)
                                 printf("connection timeout must be at least 1\n");
                                 print_usage(stdout, -1);
                         }
-
-                        l_hle->set_timeout_s(l_timeout_s);
+                        l_settings.m_timeout_s = l_timeout_s;
                         break;
                 }
 
@@ -485,7 +540,7 @@ int main(int argc, char** argv)
                 {
                         int l_sock_opt_recv_buf_size = atoi(optarg);
                         // TODO Check value...
-                        l_hle->set_sock_opt_recv_buf_size(l_sock_opt_recv_buf_size);
+                        l_settings.m_sock_opt_recv_buf_size = l_sock_opt_recv_buf_size;
                         break;
                 }
 
@@ -496,7 +551,7 @@ int main(int argc, char** argv)
                 {
                         int l_sock_opt_send_buf_size = atoi(optarg);
                         // TODO Check value...
-                        l_hle->set_sock_opt_send_buf_size(l_sock_opt_send_buf_size);
+                        l_settings.m_sock_opt_send_buf_size = l_sock_opt_send_buf_size;
                         break;
                 }
 
@@ -505,7 +560,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 case 'D':
                 {
-                        l_hle->set_sock_opt_no_delay(true);
+                        l_settings.m_sock_opt_no_delay = true;
                         break;
                 }
 
@@ -524,7 +579,6 @@ int main(int argc, char** argv)
                 case 'r':
                 {
                         l_settings.m_verbose = true;
-                        l_hle->set_verbose(true);
                         break;
                 }
 
@@ -534,7 +588,6 @@ int main(int argc, char** argv)
                 case 'c':
                 {
                         l_settings.m_color = true;
-                        l_hle->set_color(true);
                         break;
                 }
 
@@ -544,7 +597,6 @@ int main(int argc, char** argv)
                 case 'q':
                 {
                         l_settings.m_quiet = true;
-                        l_hle->set_quiet(true);
                         break;
                 }
 
@@ -554,6 +606,15 @@ int main(int argc, char** argv)
                 case 's':
                 {
                         l_settings.m_show_stats = true;
+                        break;
+                }
+
+                // ---------------------------------------
+                // output file
+                // ---------------------------------------
+                case 'o':
+                {
+                        l_output_file = l_argument;
                         break;
                 }
 
@@ -621,7 +682,7 @@ int main(int argc, char** argv)
                 print_usage(stdout, -1);
         }
         // else set url
-        l_hle->set_url(l_url);
+        l_settings.m_url = l_url;
 
 
         host_list_t l_host_list;
@@ -729,6 +790,15 @@ int main(int argc, char** argv)
                 return -1;
         }
 
+        // -------------------------------------------
+        // SSL init...
+        // -------------------------------------------
+        l_settings.m_ssl_ctx = ssl_init(l_settings.m_cipher_list_str);
+        if(NULL == l_settings.m_ssl_ctx) {
+                NDBG_PRINT("Error: performing ssl_init with cipher_list: %s\n", l_settings.m_cipher_list_str.c_str());
+                return STATUS_ERROR;
+        }
+
         // Start Profiler
         if (!l_gprof_file.empty())
         {
@@ -737,7 +807,7 @@ int main(int argc, char** argv)
 
         // Run
         int32_t l_run_status = 0;
-        l_run_status = l_hle->run(l_host_list);
+        l_run_status = run(l_settings, l_host_list);
         if(0 != l_run_status)
         {
                 printf("Error: performing hle::run");
@@ -750,8 +820,7 @@ int main(int argc, char** argv)
         // Run command exec
         // -------------------------------------------
         // Copy in settings
-        l_thread_args.m_settings = l_settings;
-        command_exec(l_thread_args);
+        command_exec(l_settings);
 
         if(l_settings.m_verbose)
         {
@@ -759,7 +828,10 @@ int main(int argc, char** argv)
         }
 
         // Wait for completion
-        l_hle->wait_till_stopped();
+        wait_till_stopped(l_settings);
+
+        // One more status for the lovers
+        reqlet_repo::get()->display_status_line(l_settings.m_color);
 
         if (!l_gprof_file.empty())
         {
@@ -773,13 +845,66 @@ int main(int argc, char** argv)
         // -------------------------------------------
         if(!g_cancelled && !l_settings.m_quiet)
         {
-                reqlet_repo::get()->dump_all_responses(l_settings.m_color, l_output_pretty, l_output_mode, l_output_part);
+                bool l_use_color = l_settings.m_color;
+                if(!l_output_file.empty()) l_use_color = false;
+                std::string l_responses_str;
+                l_responses_str = reqlet_repo::get()->dump_all_responses(l_use_color, l_output_pretty, l_output_mode, l_output_part);
+                if(l_output_file.empty())
+                {
+                        NDBG_OUTPUT("%s\n", l_responses_str.c_str());
+                }
+                else
+                {
+                        int32_t l_num_bytes_written = 0;
+                        int32_t l_status = 0;
+                        // Open
+                        FILE *l_file_ptr = fopen(l_output_file.c_str(), "w+");
+                        if(l_file_ptr == NULL)
+                        {
+                                NDBG_PRINT("Error performing fopen. Reason: %s\n", strerror(errno));
+                                return STATUS_ERROR;
+                        }
+
+                        // Write
+                        l_num_bytes_written = fwrite(l_responses_str.c_str(), 1, l_responses_str.length(), l_file_ptr);
+                        if(l_num_bytes_written != (int32_t)l_responses_str.length())
+                        {
+                                NDBG_PRINT("Error performing fwrite. Reason: %s\n", strerror(errno));
+                                fclose(l_file_ptr);
+                                return STATUS_ERROR;
+                        }
+
+                        // Close
+                        l_status = fclose(l_file_ptr);
+                        if(l_status != 0)
+                        {
+                                NDBG_PRINT("Error performing fclose. Reason: %s\n", strerror(errno));
+                                return STATUS_ERROR;
+                        }
+
+                }
+
         }
 
         // -------------------------------------------
         // Cleanup...
         // -------------------------------------------
-        // TODO
+        // -------------------------------------------
+        // Delete t_client list...
+        // -------------------------------------------
+        for(t_client_list_t::iterator i_client_hle = l_settings.m_t_client_list.begin();
+                        i_client_hle != l_settings.m_t_client_list.end(); )
+        {
+                t_client *l_t_client_ptr = *i_client_hle;
+                delete l_t_client_ptr;
+                l_settings.m_t_client_list.erase(i_client_hle++);
+        }
+
+        // SSL Cleanup
+        ssl_kill_locks();
+
+        // TODO Deprecated???
+        //EVP_cleanup();
 
         //if(l_settings.m_verbose)
         //{
@@ -841,12 +966,11 @@ void nonblock(int state)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void command_exec(thread_args_struct_t &a_thread_args)
+void command_exec(settings_struct_t &a_settings)
 {
         int i = 0;
         char l_cmd = ' ';
         bool l_sent_stop = false;
-        hle *l_hle = hle::get();
         //bool l_first_time = true;
 
         nonblock(NB_ENABLE);
@@ -872,7 +996,7 @@ void command_exec(thread_args_struct_t &a_thread_args)
                         {
                                 g_test_finished = true;
                                 g_cancelled = true;
-                                l_hle->stop();
+                                stop(a_settings);
                                 l_sent_stop = true;
                                 break;
                         }
@@ -888,12 +1012,12 @@ void command_exec(thread_args_struct_t &a_thread_args)
                 // TODO add define...
                 usleep(200000);
 
-                if(a_thread_args.m_settings.m_show_stats)
+                if(a_settings.m_show_stats)
                 {
-                        l_reqlet_repo->display_status_line(a_thread_args.m_settings.m_color);
+                        l_reqlet_repo->display_status_line(a_settings.m_color);
                 }
 
-                if (!l_hle->is_running())
+                if (!is_running(a_settings))
                 {
                         //NDBG_PRINT("IS NOT RUNNING.\n");
                         g_test_finished = true;
@@ -904,7 +1028,7 @@ void command_exec(thread_args_struct_t &a_thread_args)
         // Send stop -if unsent
         if(!l_sent_stop)
         {
-                l_hle->stop();
+                stop(a_settings);
                 l_sent_stop = true;
         }
 
@@ -943,4 +1067,162 @@ int32_t add_line(FILE *a_file_ptr, host_list_t &a_host_list)
         }
 
         return STATUS_OK;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t run(settings_struct_t &a_settings, host_list_t &a_host_list)
+{
+        int32_t l_retval = STATUS_OK;
+        reqlet_repo *l_reqlet_repo = NULL;
+
+        // Create the reqlet list
+        l_reqlet_repo = reqlet_repo::get();
+        uint32_t l_reqlet_num = 0;
+        for(host_list_t::iterator i_host = a_host_list.begin();
+                        i_host != a_host_list.end();
+                        ++i_host, ++l_reqlet_num)
+        {
+                // Create a re
+                reqlet *l_reqlet = new reqlet(l_reqlet_num, 1);
+                l_reqlet->init_with_url(a_settings.m_url);
+
+                // Get host and port if exist
+                parsed_url l_url;
+                l_url.parse(*i_host);
+
+                if(strchr(i_host->c_str(), (int)':'))
+                {
+                        l_reqlet->set_host(l_url.m_host);
+                        l_reqlet->set_port(l_url.m_port);
+                }
+                else
+                {
+                        l_reqlet->set_host(*i_host);
+                }
+
+                // Add to list
+                l_reqlet_repo->add_reqlet(l_reqlet);
+
+        }
+
+        // -------------------------------------------
+        // Create t_client list...
+        // -------------------------------------------
+        for(uint32_t i_client_idx = 0; i_client_idx < a_settings.m_num_threads; ++i_client_idx)
+        {
+
+                if(a_settings.m_verbose)
+                {
+                        NDBG_PRINT("Creating...\n");
+                }
+
+                // Construct with settings...
+                t_client *l_t_client = new t_client(
+                                a_settings.m_verbose,
+                                a_settings.m_color,
+                                a_settings.m_sock_opt_recv_buf_size,
+                                a_settings.m_sock_opt_send_buf_size,
+                                a_settings.m_sock_opt_no_delay,
+                                a_settings.m_timeout_s,
+                                a_settings.m_cipher_list_str,
+                                a_settings.m_ssl_ctx,
+                                a_settings.m_evr_loop_type,
+                                a_settings.m_start_parallel
+                );
+
+                for(header_map_t::iterator i_header = a_settings.m_header_map.begin();
+                    i_header != a_settings.m_header_map.end();
+                    ++i_header)
+                {
+                        l_t_client->set_header(i_header->first, i_header->second);
+                }
+
+                a_settings.m_t_client_list.push_back(l_t_client);
+        }
+
+        // -------------------------------------------
+        // Run...
+        // -------------------------------------------
+        for(t_client_list_t::iterator i_t_client = a_settings.m_t_client_list.begin();
+                        i_t_client != a_settings.m_t_client_list.end();
+                        ++i_t_client)
+        {
+                if(a_settings.m_verbose)
+                {
+                        NDBG_PRINT("Running...\n");
+                }
+                (*i_t_client)->run();
+        }
+
+        return l_retval;
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t stop(settings_struct_t &a_settings)
+{
+        int32_t l_retval = STATUS_OK;
+
+        for (t_client_list_t::iterator i_t_client = a_settings.m_t_client_list.begin();
+                        i_t_client != a_settings.m_t_client_list.end();
+                        ++i_t_client)
+        {
+                (*i_t_client)->stop();
+        }
+
+        return l_retval;
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t wait_till_stopped(settings_struct_t &a_settings)
+{
+        int32_t l_retval = STATUS_OK;
+
+        // -------------------------------------------
+        // Join all threads before exit
+        // -------------------------------------------
+        for(t_client_list_t::iterator i_client = a_settings.m_t_client_list.begin();
+            i_client != a_settings.m_t_client_list.end();
+            ++i_client)
+        {
+
+                //if(m_verbose)
+                //{
+                //      NDBG_PRINT("joining...\n");
+                //}
+                pthread_join(((*i_client)->m_t_run_thread), NULL);
+
+        }
+        return l_retval;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+bool is_running(settings_struct_t &a_settings)
+{
+        for (t_client_list_t::iterator i_client_hle = a_settings.m_t_client_list.begin();
+             i_client_hle != a_settings.m_t_client_list.end();
+             ++i_client_hle)
+        {
+                if((*i_client_hle)->is_running())
+                        return true;
+        }
+
+        return false;
 }

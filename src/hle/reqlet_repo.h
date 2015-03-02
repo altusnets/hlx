@@ -93,7 +93,7 @@ public:
         void up_done(bool a_error) { ++m_num_done; if(a_error)++m_num_error;};
         void up_resolved(bool a_error) {if(a_error)++m_num_error; else ++m_num_resolved;};
         void display_status_line(bool a_color);
-        void dump_all_responses(bool a_color, bool a_pretty, output_type_t a_output_type, int a_part_map);
+        std::string dump_all_responses(bool a_color, bool a_pretty, output_type_t a_output_type, int a_part_map);
         reqlet *try_get_resolved(void);
 
 private:

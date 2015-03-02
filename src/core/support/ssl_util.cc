@@ -249,7 +249,7 @@ SSL_CTX* ssl_init(const std::string &a_cipher_list)
         {
                 if (! SSL_CTX_set_cipher_list(server_ctx, a_cipher_list.c_str()))
                 {
-                        NDBG_PRINT("ERRRO: cannot set m_cipher list\n");
+                        NDBG_PRINT("Error cannot set m_cipher list\n");
                         ERR_print_errors_fp(stderr);
                         //close_connection(con, nowP);
                         return NULL;

@@ -33,13 +33,16 @@
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_type_t a_output_type, int a_part_map)
+#define ARESP(_str) l_responses_str += _str
+std::string reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_type_t a_output_type, int a_part_map)
 {
+        std::string l_responses_str = "";
         std::string l_host_color = "";
         std::string l_status_color = "";
         std::string l_header_color = "";
         std::string l_body_color = "";
         std::string l_off_color = "";
+        char l_buf[256];
         if(a_color)
         {
                 l_host_color = ANSI_COLOR_FG_BLUE;
@@ -51,8 +54,8 @@ void reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_type_t 
 
         if(a_output_type == OUTPUT_JSON)
         {
-                NDBG_OUTPUT("[");
-                if(a_pretty) NDBG_OUTPUT("\n");
+                ARESP("[");
+                if(a_pretty) ARESP("\n");
         }
 
         int l_cur_reqlet = 0;
@@ -66,25 +69,27 @@ void reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_type_t 
                 bool l_fbf = false;
                 if(a_output_type == OUTPUT_JSON)
                 {
-                        if(a_pretty) if(a_output_type == OUTPUT_JSON) NDBG_OUTPUT("  ");
-                        NDBG_OUTPUT("{");
-                        if(a_pretty) if(a_output_type == OUTPUT_JSON) NDBG_OUTPUT("\n");
+                        if(a_pretty) if(a_output_type == OUTPUT_JSON) ARESP("  ");
+                        ARESP("{");
+                        if(a_pretty) if(a_output_type == OUTPUT_JSON) ARESP("\n");
                 }
 
                 // Host
                 if(a_part_map & PART_HOST)
                 {
-                        if(a_pretty) if(a_output_type == OUTPUT_JSON) NDBG_OUTPUT("    ");
-                        NDBG_OUTPUT("\"%sHost%s\": \"%s\"", l_host_color.c_str(), l_off_color.c_str(), (*i_reqlet)->m_url.m_host.c_str());
+                        if(a_pretty) if(a_output_type == OUTPUT_JSON) ARESP("    ");
+                        sprintf(l_buf, "\"%sHost%s\": \"%s\"", l_host_color.c_str(), l_off_color.c_str(), (*i_reqlet)->m_url.m_host.c_str());
+                        ARESP(l_buf);
                         l_fbf = true;
                 }
 
                 // Status Code
                 if(a_part_map & PART_STATUS_CODE)
                 {
-                        if(l_fbf) {NDBG_OUTPUT(", "); l_fbf = false;}
-                        if(a_pretty) if(a_output_type == OUTPUT_JSON) NDBG_OUTPUT("\n    ");
-                        NDBG_OUTPUT("\"%sStatus-Code%s\": %d", l_status_color.c_str(), l_off_color.c_str(), (*i_reqlet)->m_response_status);
+                        if(l_fbf) {ARESP(", "); l_fbf = false;}
+                        if(a_pretty) if(a_output_type == OUTPUT_JSON) ARESP("\n    ");
+                        sprintf(l_buf, "\"%sStatus-Code%s\": %d", l_status_color.c_str(), l_off_color.c_str(), (*i_reqlet)->m_response_status);
+                        ARESP(l_buf);
                         l_fbf = true;
                 }
 
@@ -97,11 +102,12 @@ void reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_type_t 
                                         i_header != (*i_reqlet)->m_response_headers.end();
                             ++i_header)
                         {
-                                if(l_fbf) {NDBG_OUTPUT(", "); l_fbf = false;}
+                                if(l_fbf) {ARESP(", "); l_fbf = false;}
                                 if(a_pretty) if(a_output_type == OUTPUT_JSON) NDBG_OUTPUT("\n    ");
-                                NDBG_OUTPUT("\"%s%s%s\": \"%s\"",
+                                sprintf(l_buf, "\"%s%s%s\": \"%s\"",
                                                 l_header_color.c_str(), i_header->first.c_str(), l_off_color.c_str(),
                                                 i_header->second.c_str());
+                                ARESP(l_buf);
                                 l_fbf = true;
                         }
                 }
@@ -109,25 +115,29 @@ void reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_type_t 
                 // Body
                 if(a_part_map & PART_BODY)
                 {
-                        if(l_fbf) {NDBG_OUTPUT(", "); l_fbf = false;}
-                        if(a_pretty) if(a_output_type == OUTPUT_JSON) NDBG_OUTPUT("\n    ");
-                        NDBG_OUTPUT("\"%sBody%s\": %s", l_body_color.c_str(), l_off_color.c_str(), (*i_reqlet)->m_response_body.c_str());
+                        if(l_fbf) {ARESP(", "); l_fbf = false;}
+                        if(a_pretty) if(a_output_type == OUTPUT_JSON) ARESP("\n    ");
+                        sprintf(l_buf, "\"%sBody%s\": %s", l_body_color.c_str(), l_off_color.c_str(), (*i_reqlet)->m_response_body.c_str());
+                        ARESP(l_buf);
                         l_fbf = true;
                 }
 
                 if(a_output_type == OUTPUT_JSON)
                 {
-                        if(a_pretty) NDBG_OUTPUT("\n  ");
-                        NDBG_OUTPUT("}");
-                        if(l_cur_reqlet < (l_reqlet_num - 1)) NDBG_OUTPUT(", ");
+                        if(a_pretty) ARESP("\n  ");
+                        ARESP("}");
+                        if(l_cur_reqlet < (l_reqlet_num - 1)) ARESP(", ");
                 }
-                NDBG_OUTPUT("\n");
+                ARESP("\n");
         }
 
         if(a_output_type == OUTPUT_JSON)
         {
-                NDBG_OUTPUT("]\n");
+                ARESP("]\n");
         }
+
+        return l_responses_str;
+
 }
 
 //: ----------------------------------------------------------------------------
