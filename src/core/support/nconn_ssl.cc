@@ -402,7 +402,7 @@ int32_t nconn_ssl::init(void)
 
         const long l_ssl_options = m_ssl_opt_options;
 
-        NDBG_PRINT("l_ssl_options: 0x%08lX\n", l_ssl_options);
+        //NDBG_PRINT("l_ssl_options: 0x%08lX\n", l_ssl_options);
 
         if (l_ssl_options)
         {

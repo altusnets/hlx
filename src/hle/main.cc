@@ -1090,7 +1090,10 @@ int32_t t_client::start_connections(void)
                 ++(l_reqlet->m_stat_agg.m_num_conn_started);
 
                 // Create request
-                create_request(*l_nconn, *l_reqlet);
+                if(!m_settings.m_connect_only)
+                {
+                        create_request(*l_nconn, *l_reqlet);
+                }
 
                 m_conn_used_set.insert(*i_conn);
                 m_conn_free_list.erase(i_conn++);
