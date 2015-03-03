@@ -58,11 +58,15 @@ public:
 
                 // Settings
                 OPT_SSL_CIPHER_STR = 1001,
+                OPT_SSL_OPTIONS = 1002,
 
                 // Verify options
                 OPT_SSL_VERIFY = 1100,
-                OPT_SSL_CA_FILE = 1101,
-                OPT_SSL_CA_PATH = 1102,
+                OPT_SSL_VERIFY_ALLOW_SELF_SIGNED = 1101,
+
+                // CA options
+                OPT_SSL_CA_FILE = 1201,
+                OPT_SSL_CA_PATH = 1202,
 
                 OPT_SSL_SENTINEL = 1999
 
@@ -88,7 +92,7 @@ public:
                           m_ssl_opt_ca_file(""),
                           m_ssl_opt_ca_path(""),
                           m_ssl_opt_options(0),
-                          m_ssl_opt_cipher_list_str(""),
+                          m_ssl_opt_cipher_str(""),
                           m_ssl_state(SSL_STATE_FREE)
           {
 
@@ -160,7 +164,7 @@ private:
         std::string m_ssl_opt_ca_file;
         std::string m_ssl_opt_ca_path;
         long m_ssl_opt_options;
-        std::string m_ssl_opt_cipher_list_str;
+        std::string m_ssl_opt_cipher_str;
 
         ssl_state_t m_ssl_state;
 

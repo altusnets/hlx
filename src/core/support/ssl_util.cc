@@ -31,6 +31,9 @@
 #include "ndebug.h"
 #include "ssl_util.h"
 
+#include <map>
+#include <algorithm>
+
 #include <pthread.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -277,7 +280,7 @@ SSL_CTX* ssl_init(const std::string &a_cipher_list,
 		if(1 != l_status)
 		{
 			ERR_print_errors_fp(stdout);
-			NDBG_PRINT("Error performing SSL_CTX_load_verify_locations.  Reason: %s",
+			NDBG_PRINT("Error performing SSL_CTX_load_verify_locations.  Reason: %s\n",
 					ERR_error_string(ERR_get_error(), NULL));
 			SSL_CTX_free(l_server_ctx);
 			return NULL;
@@ -287,7 +290,7 @@ SSL_CTX* ssl_init(const std::string &a_cipher_list,
 		if(1 != l_status)
 		{
 			ERR_print_errors_fp(stdout);
-			NDBG_PRINT("Error performing SSL_CTX_set_default_verify_paths.  Reason: %s",
+			NDBG_PRINT("Error performing SSL_CTX_set_default_verify_paths.  Reason: %s\n",
 					ERR_error_string(ERR_get_error(), NULL));
 			SSL_CTX_free(l_server_ctx);
 			return NULL;
@@ -296,11 +299,74 @@ SSL_CTX* ssl_init(const std::string &a_cipher_list,
 
         if(a_options)
         {
-		// disable tls 1.1 and 1.2 support
-		SSL_CTX_set_options(l_server_ctx, a_options);
+                SSL_CTX_set_options(l_server_ctx, a_options);
+                // TODO Check return
+                //long l_results = SSL_CTX_set_options(l_server_ctx, a_options);
+                //NDBG_PRINT("Set SSL CTX options: 0x%08lX -set to: 0x%08lX \n", l_results, a_options);
+
         }
 
 
         //NDBG_PRINT("SSL_CTX_new success\n");
         return l_server_ctx;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+typedef std::map <std::string, long>ssl_options_map_t;
+ssl_options_map_t g_ssl_options_map;
+int32_t get_ssl_options_str_val(const std::string a_options_str, long &ao_val)
+{
+
+        std::string l_options_str = a_options_str;
+
+        if(g_ssl_options_map.empty())
+        {
+                g_ssl_options_map["SSL_OP_NO_SSLv2"] = SSL_OP_NO_SSLv2;
+                g_ssl_options_map["SSL_OP_NO_SSLv3"] = SSL_OP_NO_SSLv3;
+                g_ssl_options_map["SSL_OP_NO_TLSv1"] = SSL_OP_NO_TLSv1;
+                g_ssl_options_map["SSL_OP_NO_TLSv1_2"] = SSL_OP_NO_TLSv1_2;
+                g_ssl_options_map["SSL_OP_NO_TLSv1_1"] = SSL_OP_NO_TLSv1_1;
+        }
+
+        // Remove whitespace
+        l_options_str.erase( std::remove_if( l_options_str.begin(), l_options_str.end(), ::isspace ), l_options_str.end() );
+
+        ao_val = 0;
+
+        std::string l_token;
+        std::string l_delim = "|";
+        size_t l_start = 0U;
+        size_t l_end = l_options_str.find(l_delim);
+
+        while(l_end != std::string::npos)
+        {
+                l_token = l_options_str.substr(l_start, l_end - l_start);
+                l_start = l_end + l_delim.length();
+                l_end = l_options_str.find(l_delim, l_start);
+                //NDBG_PRINT("TOKEN: %s\n", l_token.c_str());
+                ssl_options_map_t::iterator i_option  = g_ssl_options_map.find(l_token);
+                if(i_option == g_ssl_options_map.end())
+                {
+                        NDBG_PRINT("Error unrecognized ssl option: %s\n", l_token.c_str());
+                        return STATUS_ERROR;
+                }
+                ao_val |= i_option->second;
+        };
+        l_token = l_options_str.substr(l_start, l_options_str.length() - l_start);
+        //NDBG_PRINT("TOKEN: %s\n", l_token.c_str());
+        ssl_options_map_t::iterator i_option  = g_ssl_options_map.find(l_token);
+        if(i_option == g_ssl_options_map.end())
+        {
+                NDBG_PRINT("Error unrecognized ssl option: %s\n", l_token.c_str());
+                return STATUS_ERROR;
+        }
+        ao_val |= i_option->second;
+
+        //NDBG_PRINT("ao_val: 0x%08lX\n", ao_val);
+
+        return STATUS_OK;
 }

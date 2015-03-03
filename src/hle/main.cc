@@ -98,6 +98,26 @@
                 a_t_client->cleanup_connection(a_conn); \
         }while(0)
 
+#define HLE_SET_NCONN_OPT(_conn, _opt, _buf, _len) \
+        do { \
+                int _status = 0; \
+                _status = _conn.set_opt((_opt), (_buf), (_len)); \
+                if (_status != STATUS_OK) { \
+                        NDBG_PRINT("STATUS_ERROR: Failed to set_opt %d.  Status: %d.\n", _opt, _status); \
+                        return NULL;\
+                } \
+        } while(0)
+
+#define HLE_GET_NCONN_OPT(_conn, _opt, _buf, _len) \
+        do { \
+                int _status = 0; \
+                _status = _conn.get_opt((_opt), (_buf), (_len)); \
+                if (_status != STATUS_OK) { \
+                        NDBG_PRINT("STATUS_ERROR: Failed to get_opt %d.  Status: %d.\n", _opt, _status); \
+                        return NULL;\
+                } \
+        } while(0)
+
 //: ----------------------------------------------------------------------------
 //: Types
 //: ----------------------------------------------------------------------------
@@ -145,6 +165,7 @@ typedef struct settings_struct
         SSL_CTX* m_ssl_ctx;
         std::string m_cipher_list_str;
         std::string m_ssl_options_str;
+        long m_ssl_options;
         bool m_ssl_verify;
         bool m_ssl_sni;
         std::string m_ssl_ca_file;
@@ -172,6 +193,7 @@ typedef struct settings_struct
                 m_ssl_ctx(NULL),
                 m_cipher_list_str(""),
                 m_ssl_options_str(""),
+                m_ssl_options(0),
                 m_ssl_verify(false),
                 m_ssl_sni(false),
                 m_ssl_ca_file(""),
@@ -625,6 +647,13 @@ t_client::t_client(const settings_struct_t &a_settings):
         COPY_SETTINGS(m_ssl_ctx);
         COPY_SETTINGS(m_cipher_list_str);
 
+        COPY_SETTINGS(m_ssl_options_str);
+        COPY_SETTINGS(m_ssl_options);
+        COPY_SETTINGS(m_ssl_verify);
+        COPY_SETTINGS(m_ssl_sni);
+        COPY_SETTINGS(m_ssl_ca_file);
+        COPY_SETTINGS(m_ssl_ca_path);
+
 }
 
 
@@ -967,6 +996,35 @@ nconn *t_client::create_new_nconn(uint32_t a_id, const reqlet &a_reqlet)
                                         m_settings.m_connect_only);
         }
 
+        // -------------------------------------------
+        // Set options
+        // -------------------------------------------
+        // Set generic options
+        HLE_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_RECV_BUF_SIZE, NULL, m_settings.m_sock_opt_recv_buf_size);
+        HLE_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_SEND_BUF_SIZE, NULL, m_settings.m_sock_opt_send_buf_size);
+        HLE_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_NO_DELAY, NULL, m_settings.m_sock_opt_no_delay);
+
+        // Set ssl options
+        if(a_reqlet.m_url.m_scheme == nconn::SCHEME_SSL)
+        {
+                HLE_SET_NCONN_OPT((*l_nconn), nconn_ssl::OPT_SSL_CIPHER_STR,
+                                              m_settings.m_cipher_list_str.c_str(),
+                                              m_settings.m_cipher_list_str.length());
+
+                HLE_SET_NCONN_OPT((*l_nconn), nconn_ssl::OPT_SSL_CTX,
+                                             m_settings.m_ssl_ctx,
+                                             sizeof(m_settings.m_ssl_ctx));
+
+                HLE_SET_NCONN_OPT((*l_nconn), nconn_ssl::OPT_SSL_VERIFY,
+                                              &(m_settings.m_ssl_verify),
+                                              sizeof(m_settings.m_ssl_verify));
+
+                //HLE_SET_NCONN_OPT((*l_nconn), nconn_ssl::OPT_SSL_OPTIONS,
+                //                              &(m_settings.m_ssl_options),
+                //                              sizeof(m_settings.m_ssl_options));
+
+        }
+
         return l_nconn;
 
 }
@@ -1023,22 +1081,6 @@ int32_t t_client::start_connections(void)
                                 NDBG_PRINT("Error performing create_new_nconn\n");
                                 return STATUS_ERROR;
                         }
-
-                        // -------------------------------------------
-                        // Set options
-                        // -------------------------------------------
-                        // Set generic options
-                        SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_RECV_BUF_SIZE, NULL, m_settings.m_sock_opt_recv_buf_size);
-                        SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_SEND_BUF_SIZE, NULL, m_settings.m_sock_opt_send_buf_size);
-                        SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_NO_DELAY, NULL, m_settings.m_sock_opt_no_delay);
-
-                        // Set ssl options
-                        if(l_reqlet->m_url.m_scheme == nconn::SCHEME_SSL)
-                        {
-                                SET_NCONN_OPT((*l_nconn), nconn_ssl::OPT_SSL_CIPHER_STR, m_settings.m_cipher_list_str.c_str(), m_settings.m_cipher_list_str.length());
-                                SET_NCONN_OPT((*l_nconn), nconn_ssl::OPT_SSL_CTX, m_settings.m_ssl_ctx, sizeof(m_settings.m_ssl_ctx));
-                        }
-
                 }
 
                 // Assign the reqlet for this client
@@ -1787,6 +1829,13 @@ int main(int argc, char** argv)
                 {
                         l_settings.m_ssl_options_str = l_argument;
                         // TODO Convert to options long
+
+                        int32_t l_status;
+                        l_status = get_ssl_options_str_val(l_settings.m_ssl_options_str, l_settings.m_ssl_options);
+                        if(l_status != STATUS_OK)
+                        {
+                                return STATUS_ERROR;
+                        }
                         break;
                 }
                 // ---------------------------------------
@@ -2145,7 +2194,7 @@ int main(int argc, char** argv)
         // SSL init...
         // -------------------------------------------
         l_settings.m_ssl_ctx = ssl_init(l_settings.m_cipher_list_str, // ctx cipher list str
-                                        0,                            // ctx options
+                                        l_settings.m_ssl_options,     // ctx options
                                         l_settings.m_ssl_ca_file,     // ctx ca file
                                         l_settings.m_ssl_ca_path);    // ctx ca path
         if(NULL == l_settings.m_ssl_ctx) {

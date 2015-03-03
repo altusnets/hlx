@@ -401,22 +401,26 @@ int32_t nconn_ssl::init(void)
         // TODO Check for Errors
 
         const long l_ssl_options = m_ssl_opt_options;
+
+        NDBG_PRINT("l_ssl_options: 0x%08lX\n", l_ssl_options);
+
         if (l_ssl_options)
         {
                 // clear all options and set specified options
                 SSL_clear_options(m_ssl, 0x11111111L);
-                if (l_ssl_options != SSL_set_options(m_ssl, l_ssl_options))
+                long l_result = SSL_set_options(m_ssl, l_ssl_options);
+                if (l_ssl_options != l_result)
                 {
-                        NDBG_PRINT("Failed to set SSL options: %ld", l_ssl_options);
-                        return STATUS_ERROR;
+                        //NDBG_PRINT("Failed to set SSL options: 0x%08lX -set to: 0x%08lX \n", l_result, l_ssl_options);
+                        //return STATUS_ERROR;
                 }
         }
 
-        if (!m_ssl_opt_cipher_list_str.empty())
+        if (!m_ssl_opt_cipher_str.empty())
         {
-                if (1 != SSL_set_cipher_list(m_ssl, m_ssl_opt_cipher_list_str.c_str()))
+                if (1 != SSL_set_cipher_list(m_ssl, m_ssl_opt_cipher_str.c_str()))
                 {
-                	NDBG_PRINT("Failed to set ssl cipher list: %s", m_ssl_opt_cipher_list_str.c_str());
+                	NDBG_PRINT("Failed to set ssl cipher list: %s\n", m_ssl_opt_cipher_str.c_str());
                         return STATUS_ERROR;
                 }
         }
@@ -427,7 +431,7 @@ int32_t nconn_ssl::init(void)
                 // const_cast to work around SSL's use of arg -this call does not change buffer argument
                 if (1 != SSL_set_tlsext_host_name(m_ssl, m_ssl_opt_tlsext_hostname.c_str()))
                 {
-                	NDBG_PRINT("Failed to set tls hostname: %s", m_ssl_opt_tlsext_hostname.c_str());
+                	NDBG_PRINT("Failed to set tls hostname: %s\n", m_ssl_opt_tlsext_hostname.c_str());
                         return false;
                 }
         }
@@ -698,14 +702,32 @@ state_top:
         case SSL_STATE_CONNECTED:
         {
 
-        	int32_t l_status = 0;
-        	// Do verify
-        	char *l_hostname = NULL;
-        	l_status = validate_server_certificate(l_hostname, (!m_ssl_opt_verify_allow_self_signed));
-        	if(l_status != STATUS_OK)
-        	{
-        		return STATUS_ERROR;
-        	}
+#if 0
+                SSL_SESSION *m_ssl_session = SSL_get_session(m_ssl);
+                SSL_SESSION_print_fp(stdout, m_ssl_session);
+
+                // TODO REMOVE
+                X509* l_cert = NULL;
+                l_cert = SSL_get_peer_certificate(m_ssl);
+                if(NULL == l_cert)
+                {
+                        NDBG_PRINT("SSL_get_peer_certificate error.  ssl: %p\n", m_ssl);
+                        return STATUS_ERROR;
+                }
+                X509_print_fp(stdout, l_cert);
+#endif
+
+                if(m_ssl_opt_verify)
+                {
+                        int32_t l_status = 0;
+                        // Do verify
+                        char *l_hostname = NULL;
+                        l_status = validate_server_certificate(l_hostname, (!m_ssl_opt_verify_allow_self_signed));
+                        if(l_status != STATUS_OK)
+                        {
+                                return STATUS_ERROR;
+                        }
+                }
 
                 // -------------------------------------------
                 // Send request
@@ -779,7 +801,32 @@ int32_t nconn_ssl::set_opt(uint32_t a_opt, const void *a_buf, uint32_t a_len)
         {
         case OPT_SSL_CIPHER_STR:
         {
-                //m_cipher_str = a_len;
+                m_ssl_opt_cipher_str.assign((char *)a_buf, a_len);
+                break;
+        }
+        case OPT_SSL_OPTIONS:
+        {
+                memcpy(&m_ssl_opt_options, a_buf, sizeof(long));
+                break;
+        }
+        case OPT_SSL_VERIFY:
+        {
+                memcpy(&m_ssl_opt_verify, a_buf, sizeof(bool));
+                break;
+        }
+        case OPT_SSL_VERIFY_ALLOW_SELF_SIGNED:
+        {
+                memcpy(&m_ssl_opt_verify_allow_self_signed, a_buf, sizeof(bool));
+                break;
+        }
+        case OPT_SSL_CA_FILE:
+        {
+                m_ssl_opt_ca_file.assign((char *)a_buf, a_len);
+                break;
+        }
+        case OPT_SSL_CA_PATH:
+        {
+                m_ssl_opt_ca_path.assign((char *)a_buf, a_len);
                 break;
         }
         case OPT_SSL_CTX:
@@ -846,7 +893,7 @@ static int validate_server_certificate_hostname(X509* a_cert, const char* a_host
         if(!l_get_ids_status)
         {
                 // No names found bail out
-                NDBG_PRINT("host[%s]: ssl_x509_get_ids returned no names.", a_host);
+                NDBG_PRINT("host[%s]: ssl_x509_get_ids returned no names.\n", a_host);
                 return -1;
         }
 
@@ -858,7 +905,7 @@ static int validate_server_certificate_hostname(X509* a_cert, const char* a_host
                 }
         }
 
-        NDBG_PRINT("host[%s]: Hostname match failed.", a_host);
+        NDBG_PRINT("host[%s]: Hostname match failed.\n", a_host);
         return -1;
 
 }
@@ -877,12 +924,12 @@ int32_t nconn_ssl::validate_server_certificate(const char* a_host, bool a_disall
         l_cert = SSL_get_peer_certificate(m_ssl);
         if(NULL == l_cert)
         {
-                NDBG_PRINT("host[%s]: SSL_get_peer_certificate error.  ssl: %p", a_host, m_ssl);
+                NDBG_PRINT("host[%s]: SSL_get_peer_certificate error.  ssl: %p\n", a_host, m_ssl);
                 return -1;
         }
 
         // Example of displaying cert
-        //X509_print_fp(stdout, l_cert);
+        X509_print_fp(stdout, l_cert);
 
         // Check host name
         if(a_host)
@@ -968,7 +1015,7 @@ int ssl_cert_verify_callback_allow_self_signed(int ok, X509_STORE_CTX* store)
                         }
                         else
                         {
-                                NDBG_PRINT("ssl_cert_verify_callback_allow_self_signed Error[%d].  Reason: %s",
+                                NDBG_PRINT("ssl_cert_verify_callback_allow_self_signed Error[%d].  Reason: %s\n",
                                       err, X509_verify_cert_error_string(err));
                         }
                 }
@@ -992,7 +1039,7 @@ int ssl_cert_verify_callback(int ok, X509_STORE_CTX* store)
                         //int depth = X509_STORE_CTX_get_error_depth(store);
 
                         int err = X509_STORE_CTX_get_error(store);
-                        NDBG_PRINT("ssl_cert_verify_callback Error[%d].  Reason: %s",
+                        NDBG_PRINT("ssl_cert_verify_callback Error[%d].  Reason: %s\n",
                               err, X509_verify_cert_error_string(err));
 
                 }
