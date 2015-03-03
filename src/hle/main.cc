@@ -290,8 +290,7 @@ std::string reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_
 
         if(a_output_type == OUTPUT_JSON)
         {
-                ARESP("[");
-                if(a_pretty) ARESP("\n");
+                ARESP("[\n");
         }
 
         int l_cur_reqlet = 0;
@@ -748,7 +747,10 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
         l_status = l_nconn->run_state_machine(l_t_client->m_evr_loop, l_reqlet->m_host_info);
         if(STATUS_ERROR == l_status)
         {
-                NDBG_PRINT("Error: performing run_state_machine\n");
+                if(l_nconn->m_verbose)
+                {
+                        NDBG_PRINT("Error: performing run_state_machine\n");
+                }
                 T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 500, "Error performing connect_cb");
                 return NULL;
         }
@@ -791,7 +793,10 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
         l_status = l_nconn->run_state_machine(l_t_client->m_evr_loop, l_reqlet->m_host_info);
         if(STATUS_ERROR == l_status)
         {
-                NDBG_PRINT("Error: performing run_state_machine\n");
+                if(l_nconn->m_verbose)
+                {
+                        NDBG_PRINT("Error: performing run_state_machine\n");
+                }
                 T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 500, "Error performing connect_cb");
                 return NULL;
         }

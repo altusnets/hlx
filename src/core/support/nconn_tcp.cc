@@ -330,8 +330,11 @@ int32_t nconn_tcp::run_state_machine(evr_loop *a_evr_loop, const host_info_t &a_
 
         uint32_t l_retry_connect_count = 0;
 
-        // Cancel last timer
-        a_evr_loop->cancel_timer(&(m_timer_obj));
+        // Cancel last timer if was not in free state
+        if(m_tcp_state != TCP_STATE_FREE)
+        {
+                a_evr_loop->cancel_timer(&(m_timer_obj));
+        }
 
         //NDBG_PRINT("%sRUN_STATE_MACHINE%s: STATE[%d] --START\n", ANSI_COLOR_BG_YELLOW, ANSI_COLOR_OFF, m_tcp_state);
 state_top:

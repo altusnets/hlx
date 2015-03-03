@@ -78,7 +78,7 @@ int32_t parsed_url::parse(const std::string &a_url)
 		{
 			m_scheme = nconn::SCHEME_TCP;
 		} else {
-			fprintf(stderr, "Error unrecognnized scheme\n");
+			NDBG_PRINT("Error unrecognized scheme for url: %s\n", a_url.c_str());
 			return STATUS_ERROR;
 		}
 
