@@ -38,5 +38,5 @@ SSL_CTX* ssl_init(const std::string &a_cipher_list,
 		  const std::string &a_ca_path = "");
 void ssl_kill_locks(void);
 int32_t get_ssl_options_str_val(const std::string a_options_str, long &ao_val);
-
+int32_t get_ssl_session_info(SSL *a_ssl, std::string &ao_protocol, std::string &ao_cipher);
 #endif

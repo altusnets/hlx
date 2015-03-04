@@ -370,3 +370,77 @@ int32_t get_ssl_options_str_val(const std::string a_options_str, long &ao_val)
 
         return STATUS_OK;
 }
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t get_ssl_session_info(SSL *a_ssl, std::string &ao_protocol, std::string &ao_cipher)
+{
+
+        SSL_SESSION *m_ssl_session = SSL_get_session(a_ssl);
+        if(!m_ssl_session)
+        {
+                return STATUS_ERROR;
+        }
+
+        // -------------------------------------------------
+        // Get protocol version
+        // -------------------------------------------------
+        switch(m_ssl_session->ssl_version)
+        {
+        case SSL2_VERSION:
+        {
+                ao_protocol = "SSLv2";
+                break;
+        }
+        case SSL3_VERSION:
+        {
+                ao_protocol = "SSLv3";
+                break;
+        }
+        case TLS1_2_VERSION:
+        {
+                ao_protocol = "TLSv1.2";
+                break;
+        }
+        case TLS1_1_VERSION:
+        {
+                ao_protocol = "TLSv1.1";
+                break;
+        }
+        case TLS1_VERSION:
+        {
+                ao_protocol = "TLSv1";
+                break;
+        }
+        case DTLS1_VERSION:
+        {
+                ao_protocol = "DTLSv1";
+                break;
+        }
+        case DTLS1_BAD_VER:
+        {
+                ao_protocol = "DTLSv1-bad";
+                break;
+        }
+        default:
+        {
+                ao_protocol = "unknown";
+                break;
+        }
+        }
+
+        // -------------------------------------------------
+        // Get cipher
+        // -------------------------------------------------
+        if (m_ssl_session->cipher != NULL)
+        {
+                ao_cipher = m_ssl_session->cipher->name;
+        }
+
+        return STATUS_OK;
+}
+
+

@@ -278,7 +278,7 @@ std::string reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_
         std::string l_header_color = "";
         std::string l_body_color = "";
         std::string l_off_color = "";
-        char l_buf[256];
+        char l_buf[2048];
         if(a_color)
         {
                 l_host_color = ANSI_COLOR_FG_BLUE;
@@ -323,7 +323,15 @@ std::string reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_
                 {
                         if(l_fbf) {ARESP(", "); l_fbf = false;}
                         if(a_pretty) if(a_output_type == OUTPUT_JSON) ARESP("\n    ");
-                        sprintf(l_buf, "\"%sStatus-Code%s\": %d", l_status_color.c_str(), l_off_color.c_str(), (*i_reqlet)->m_response_status);
+                        const char *l_status_val_color = "";
+                        if(a_color)
+                        {
+                                if((*i_reqlet)->m_response_status == 200) l_status_val_color = ANSI_COLOR_FG_GREEN;
+                                else l_status_val_color = ANSI_COLOR_FG_RED;
+                        }
+                        sprintf(l_buf, "\"%sStatus-Code%s\": %s%d%s",
+                                        l_status_color.c_str(), l_off_color.c_str(),
+                                        l_status_val_color, (*i_reqlet)->m_response_status, l_off_color.c_str());
                         ARESP(l_buf);
                         l_fbf = true;
                 }
@@ -335,6 +343,26 @@ std::string reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_
                 {
                         for(header_map_t::iterator i_header = (*i_reqlet)->m_response_headers.begin();
                                         i_header != (*i_reqlet)->m_response_headers.end();
+                            ++i_header)
+                        {
+                                if(l_fbf) {ARESP(", "); l_fbf = false;}
+                                if(a_pretty) if(a_output_type == OUTPUT_JSON) NDBG_OUTPUT("\n    ");
+                                sprintf(l_buf, "\"%s%s%s\": \"%s\"",
+                                                l_header_color.c_str(), i_header->first.c_str(), l_off_color.c_str(),
+                                                i_header->second.c_str());
+                                ARESP(l_buf);
+                                l_fbf = true;
+                        }
+                }
+
+                // Headers
+                // TODO -only in json mode for now
+                //if(a_output_type == OUTPUT_JSON)
+                //if(a_part_map & PART_HEADERS)
+                if(1)
+                {
+                        for(header_map_t::iterator i_header = (*i_reqlet)->m_conn_info.begin();
+                                        i_header != (*i_reqlet)->m_conn_info.end();
                             ++i_header)
                         {
                                 if(l_fbf) {ARESP(", "); l_fbf = false;}
@@ -415,8 +443,9 @@ reqlet *reqlet_repo::try_get_resolved(void)
 
         // Try resolve
         l_status = l_reqlet->resolve();
-        if(STATUS_OK != l_status)
+        if(l_status != STATUS_OK)
         {
+                // TODO Set response and error
                 up_resolved(true);
                 return NULL;
         }
@@ -751,13 +780,20 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
                 {
                         NDBG_PRINT("Error: performing run_state_machine\n");
                 }
-                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 500, "Error performing connect_cb");
+                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 500, l_nconn->m_last_error.c_str());
                 return NULL;
         }
 
         if(l_nconn->is_done())
         {
-                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 0, "");
+                if(l_t_client->m_settings.m_connect_only)
+                {
+                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 200, "Connected Successfully");
+                }
+                else
+                {
+                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 0, "");
+                }
                 return NULL;
         }
 
@@ -797,7 +833,7 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
                 {
                         NDBG_PRINT("Error: performing run_state_machine\n");
                 }
-                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 500, "Error performing connect_cb");
+                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 500, l_nconn->m_last_error.c_str());
                 return NULL;
         }
 
@@ -812,11 +848,18 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
         {
                 if(l_status == STATUS_ERROR)
                 {
-                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 500, "Unknown error");
+                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 500, l_nconn->m_last_error.c_str());
                 }
                 else
                 {
-                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 0, "");
+                        if(l_t_client->m_settings.m_connect_only)
+                        {
+                                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 200, "Connected Successfully");
+                        }
+                        else
+                        {
+                                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 0, "");
+                        }
                 }
                 return NULL;
         }
@@ -1728,7 +1771,7 @@ int main(int argc, char** argv)
         int l_output_part =   reqlet_repo::PART_HOST
                             | reqlet_repo::PART_STATUS_CODE
                             | reqlet_repo::PART_HEADERS
-                            //| reqlet_repo::PART_BODY
+                            | reqlet_repo::PART_BODY
                             ;
         bool l_output_pretty = false;
 

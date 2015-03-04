@@ -68,6 +68,20 @@ class evr_loop;
                 } \
         } while(0)
 
+#define NCONN_ERROR(...)\
+        do { \
+                char _buf[1024];\
+                sprintf(_buf, __VA_ARGS__);\
+                m_last_error = _buf;\
+                if(m_verbose)\
+                {\
+                        fprintf(stdout, "%s:%s.%d: ", __FILE__, __FUNCTION__, __LINE__); \
+                        fprintf(stdout, __VA_ARGS__);\
+                        fprintf(stdout, "\n");\
+                        fflush(stdout); \
+                }\
+        }while(0)
+
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: ----------------------------------------------------------------------------
@@ -110,6 +124,7 @@ public:
                 m_last_connect_time_us(0),
                 m_server_response_supports_keep_alives(false),
                 m_timer_obj(NULL),
+                m_last_error(""),
                 m_id(0),
                 m_max_reqs_per_conn(a_max_reqs_per_conn),
                 m_num_reqs(0),
@@ -180,6 +195,7 @@ public:
         uint64_t m_last_connect_time_us;
         bool m_server_response_supports_keep_alives;
         void *m_timer_obj;
+        std::string m_last_error;
 
 private:
 

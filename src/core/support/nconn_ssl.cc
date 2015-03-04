@@ -28,29 +28,12 @@
 #include "util.h"
 #include "evr.h"
 #include "hostcheck.h"
+#include "reqlet.h"
+#include "ssl_util.h"
 
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
-
-#if 0
-#include "reqlet.h"
-#include "ndebug.h"
-#include "parsed_url.h"
-
-#include <string>
-
-// Fcntl and friends
-#include <fcntl.h>
-
-#include <netinet/tcp.h>
-
-#include <stdint.h>
-#ifndef __STDC_FORMAT_MACROS
-#define __STDC_FORMAT_MACROS
-#endif
-#include <inttypes.h>
-#endif
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -99,10 +82,7 @@ int32_t nconn_ssl::ssl_connect(const host_info_t &a_host_info)
                 switch(l_ssl_error) {
                 case SSL_ERROR_SSL:
                 {
-                        if(m_verbose)
-                        {
-                                NDBG_PRINT("HOST[%s]: SSL_ERROR_SSL %lu: %s\n", m_host.c_str(), ERR_get_error(), ERR_error_string(ERR_get_error(), NULL));
-                        }
+                        NCONN_ERROR("HOST[%s]: SSL_ERROR_SSL %lu: %s", m_host.c_str(), ERR_get_error(), ERR_error_string(ERR_get_error(), NULL));
                         break;
                 }
                 case SSL_ERROR_WANT_READ:
@@ -121,55 +101,44 @@ int32_t nconn_ssl::ssl_connect(const host_info_t &a_host_info)
 
                 case SSL_ERROR_WANT_X509_LOOKUP:
                 {
-                        if(m_verbose)
-                        {
-                                NDBG_PRINT("HOST[%s]: SSL_ERROR_WANT_X509_LOSTATUS_OKUP\n", m_host.c_str());
-                        }
+                        NCONN_ERROR("HOST[%s]: SSL_ERROR_WANT_X509_LOOKUP", m_host.c_str());
                         break;
                 }
 
                 // look at error stack/return value/errno
                 case SSL_ERROR_SYSCALL:
                 {
-                        if(m_verbose)
-                        {
-                                NDBG_PRINT("HOST[%s]: SSL_ERROR_SYSCALL %lu: %s\n", m_host.c_str(), ERR_get_error(), ERR_error_string(ERR_get_error(), NULL));
-                                if(l_status == 0) {
-                                        NDBG_PRINT("HOST[%s]: An EOF was observed that violates the protocol\n", m_host.c_str());
-                                } else if(l_status == -1) {
-                                        NDBG_PRINT("HOST[%s]: %s\n", m_host.c_str(), strerror(errno));
-                                }
+                        if(l_status == 0) {
+                                NCONN_ERROR("HOST[%s]: SSL_ERROR_SYSCALL %lu: %s. An EOF was observed that violates the protocol\n",
+                                                m_host.c_str(),
+                                                ERR_get_error(), ERR_error_string(ERR_get_error(), NULL));
+                        } else if(l_status == -1) {
+                                NCONN_ERROR("HOST[%s]: SSL_ERROR_SYSCALL %lu: %s. %s\n",
+                                                m_host.c_str(),
+                                                ERR_get_error(), ERR_error_string(ERR_get_error(), NULL),
+                                                strerror(errno));
                         }
                         break;
                 }
                 case SSL_ERROR_ZERO_RETURN:
                 {
-                        if(m_verbose)
-                        {
-                                NDBG_PRINT("HOST[%s]: SSL_ERROR_ZERO_RETURN\n", m_host.c_str());
-                        }
+                        NCONN_ERROR("HOST[%s]: SSL_ERROR_ZERO_RETURN", m_host.c_str());
                         break;
                 }
                 case SSL_ERROR_WANT_CONNECT:
                 {
-                        if(m_verbose)
-                        {
-                                NDBG_PRINT("HOST[%s]: SSL_ERROR_WANT_CONNECT\n", m_host.c_str());
-                        }
+                        NCONN_ERROR("HOST[%s]: SSL_ERROR_WANT_CONNECT", m_host.c_str());
                         break;
                 }
                 case SSL_ERROR_WANT_ACCEPT:
                 {
-                        if(m_verbose)
-                        {
-                                NDBG_PRINT("HOST[%s]: SSL_ERROR_WANT_ACCEPT\n", m_host.c_str());
-                        }
+                        NCONN_ERROR("HOST[%s]: SSL_ERROR_WANT_ACCEPT", m_host.c_str());
                         break;
                 }
                 }
 
 
-                ERR_print_errors_fp(stderr);
+                //ERR_print_errors_fp(stderr);
                 return STATUS_ERROR;
         }
         else if(1 == l_status)
@@ -527,10 +496,7 @@ state_top:
                                             EVR_FILE_ATTR_MASK_STATUS_ERROR,
                                             this))
                 {
-                        if(m_verbose)
-                        {
-                                NDBG_PRINT("HOST[%s]: Error: Couldn't add socket file descriptor\n", m_host.c_str());
-                        }
+                        NCONN_ERROR("HOST[%s]: Error: Couldn't add socket file descriptor", m_host.c_str());
                         return STATUS_ERROR;
                 }
 
@@ -583,27 +549,19 @@ state_top:
                                 l_errlen = sizeof(l_err);
                                 if (getsockopt(m_fd, SOL_SOCKET, SO_ERROR, (void*) &l_err, &l_errlen) < 0)
                                 {
-                                        if(m_verbose)
-                                        {
-                                                NDBG_PRINT("HOST[%s]: unknown connect error\n",
-                                                                m_host.c_str());
-                                        }
+                                        NCONN_ERROR("HOST[%s]: unknown connect error",
+                                                        m_host.c_str());
                                 }
                                 else
                                 {
-                                        if(m_verbose)
-                                        {        NDBG_PRINT("HOST[%s]: %s\n", m_host.c_str(),
-                                                                strerror(l_err));
-                                        }
+                                        NCONN_ERROR("HOST[%s]: %s\n", m_host.c_str(),
+                                                        strerror(l_err));
                                 }
                                 return STATUS_ERROR;
                         }
                         case ECONNREFUSED:
                         {
-                                if(m_verbose)
-                                {
-                                        NDBG_PRINT("HOST[%s]: Error Connection refused. Reason: %s\n", m_host.c_str(), strerror(errno));
-                                }
+                                NCONN_ERROR("HOST[%s]: Error Connection refused. Reason: %s", m_host.c_str(), strerror(errno));
                                 return STATUS_ERROR;
                         }
                         case EAGAIN:
@@ -618,10 +576,7 @@ state_top:
                                                             EVR_FILE_ATTR_MASK_WRITE|EVR_FILE_ATTR_MASK_STATUS_ERROR,
                                                             this))
                                 {
-                                        if(m_verbose)
-                                        {
-                                                NDBG_PRINT("HOST[%s]: Error: Couldn't add socket file descriptor\n", m_host.c_str());
-                                        }
+                                        NCONN_ERROR("HOST[%s]: Error: Couldn't add socket file descriptor", m_host.c_str());
                                         return STATUS_ERROR;
                                 }
                                 return STATUS_OK;
@@ -638,20 +593,14 @@ state_top:
                                 }
                                 else
                                 {
-                                        if(m_verbose)
-                                        {
-                                                NDBG_PRINT("HOST[%s]: Error connect(). Reason: %s\n", m_host.c_str(), strerror(errno));
-                                        }
+                                        NCONN_ERROR("HOST[%s]: Error connect(). Reason: %s", m_host.c_str(), strerror(errno));
                                         return STATUS_ERROR;
                                 }
                                 break;
                         }
                         default:
                         {
-                                if(m_verbose)
-                                {
-                                        NDBG_PRINT("HOST[%s]: Error Unkown. Reason: %s\n", m_host.c_str(), strerror(errno));
-                                }
+                                NCONN_ERROR("HOST[%s]: Error Unkown. Reason: %s", m_host.c_str(), strerror(errno));
                                 return STATUS_ERROR;
                         }
                         }
@@ -683,7 +632,7 @@ state_top:
                                             EVR_FILE_ATTR_MASK_READ|EVR_FILE_ATTR_MASK_STATUS_ERROR,
                                             this))
                 {
-                        NDBG_PRINT("HOST[%s]: Error: Couldn't add socket file descriptor\n", m_host.c_str());
+                        NCONN_ERROR("HOST[%s]: Error: Couldn't add socket file descriptor", m_host.c_str());
                         return STATUS_ERROR;
                 }
 
@@ -708,10 +657,7 @@ state_top:
                                                             EVR_FILE_ATTR_MASK_READ|EVR_FILE_ATTR_MASK_STATUS_ERROR,
                                                             this))
                                 {
-                                        if(m_verbose)
-                                        {
-                                                NDBG_PRINT("HOST[%s]: Error: Couldn't add socket file descriptor\n", m_host.c_str());
-                                        }
+                                        NCONN_ERROR("HOST[%s]: Error: Couldn't add socket file descriptor", m_host.c_str());
                                         return STATUS_ERROR;
                                 }
                         }
@@ -721,10 +667,7 @@ state_top:
                                                             EVR_FILE_ATTR_MASK_WRITE|EVR_FILE_ATTR_MASK_STATUS_ERROR,
                                                             this))
                                 {
-                                        if(m_verbose)
-                                        {
-                                                NDBG_PRINT("HOST[%s]: Error: Couldn't add socket file descriptor\n", m_host.c_str());
-                                        }
+                                        NCONN_ERROR("HOST[%s]: Error: Couldn't add socket file descriptor", m_host.c_str());
                                         return STATUS_ERROR;
                                 }
                         }
@@ -732,10 +675,6 @@ state_top:
                 }
                 else if(STATUS_OK != l_status)
                 {
-                        if(m_verbose)
-                        {
-                                NDBG_PRINT("HOST[%s]: Error: performing connect_cb\n", m_host.c_str());
-                        }
                         return STATUS_ERROR;
                 }
 
@@ -746,10 +685,7 @@ state_top:
                                             EVR_FILE_ATTR_MASK_READ|EVR_FILE_ATTR_MASK_STATUS_ERROR,
                                             this))
                 {
-                        if(m_verbose)
-                        {
-                                NDBG_PRINT("HOST[%s]: Error: Couldn't add socket file descriptor\n", m_host.c_str());
-                        }
+                        NCONN_ERROR("HOST[%s]: Error: Couldn't add socket file descriptor", m_host.c_str());
                         return STATUS_ERROR;
                 }
 
@@ -777,6 +713,34 @@ state_top:
                 X509_print_fp(stdout, l_cert);
 #endif
 
+                // -----------------------------------------
+                // Store protocol and cipher
+                // -----------------------------------------
+                // SSL-Session:
+                //    Protocol  : TLSv1
+                //    Cipher    : ECDHE-RSA-AES256-SHA
+                // -----------------------------------------
+                // TODO Only store in some mode???
+                // might be slow
+                if(1)
+                {
+                        reqlet *l_reqlet = static_cast<reqlet *>(m_data1);
+                        if(l_reqlet)
+                        {
+                                // Get protocol
+                                std::string l_protocol;
+                                std::string l_cipher;
+                                int32_t l_status;
+                                l_status = get_ssl_session_info(m_ssl, l_protocol, l_cipher);
+                                if(l_status != STATUS_OK)
+                                {
+                                        // do nothing
+                                }
+                                l_reqlet->m_conn_info["Protocol"] = l_protocol;
+                                l_reqlet->m_conn_info["Cipher"] = l_cipher;
+                        }
+                }
+
                 if(m_ssl_opt_verify)
                 {
                         int32_t l_status = 0;
@@ -799,10 +763,7 @@ state_top:
 			l_request_status = send_request(false);
 			if(l_request_status != STATUS_OK)
 			{
-	                        if(m_verbose)
-	                        {
-	                                NDBG_PRINT("HOST[%s]: Error: performing send_request\n", m_host.c_str());
-	                        }
+			        NCONN_ERROR("HOST[%s]: Error: performing send_request", m_host.c_str());
 				return STATUS_ERROR;
 			}
         	}
@@ -825,10 +786,7 @@ state_top:
                 //NDBG_PRINT("%sCNST_READING%s: receive_response(): total: %d\n", ANSI_COLOR_BG_CYAN, ANSI_COLOR_OFF, (int)m_stat.m_total_bytes);
                 if(l_read_status < 0)
                 {
-                        if(m_verbose)
-                        {
-                                NDBG_PRINT("HOST[%s]: Error: performing receive_response\n", m_host.c_str());
-                        }
+                        NCONN_ERROR("HOST[%s]: Error: performing receive_response", m_host.c_str());
                         return STATUS_ERROR;
                 }
                 return l_read_status;
@@ -990,12 +948,12 @@ int32_t nconn_ssl::validate_server_certificate(const char* a_host, bool a_disall
         l_cert = SSL_get_peer_certificate(m_ssl);
         if(NULL == l_cert)
         {
-                NDBG_PRINT("HOST[%s]: SSL_get_peer_certificate error.  ssl: %p\n", a_host, m_ssl);
-                return -1;
+                NCONN_ERROR("HOST[%s]: SSL_get_peer_certificate error.  ssl: %p", a_host, m_ssl);
+                return STATUS_ERROR;
         }
 
         // Example of displaying cert
-        X509_print_fp(stdout, l_cert);
+        //X509_print_fp(stdout, l_cert);
 
         // Check host name
         if(a_host)
@@ -1009,7 +967,7 @@ int32_t nconn_ssl::validate_server_certificate(const char* a_host, bool a_disall
                                 X509_free(l_cert);
                                 l_cert = NULL;
                         }
-                        return -1;
+                        return STATUS_ERROR;
                 }
         }
 
@@ -1041,7 +999,7 @@ int32_t nconn_ssl::validate_server_certificate(const char* a_host, bool a_disall
                         }
                 }
 
-                NDBG_PRINT("HOST[%s]: SSL_get_verify_result[%ld]: %s\n",
+                NCONN_ERROR("HOST[%s]: SSL_get_verify_result[%ld]: %s",
                       a_host,
                       l_ssl_verify_result,
                       X509_verify_cert_error_string(l_ssl_verify_result));
@@ -1050,7 +1008,7 @@ int32_t nconn_ssl::validate_server_certificate(const char* a_host, bool a_disall
                         X509_free(l_cert);
                         l_cert = NULL;
                 }
-                return -1;
+                return STATUS_ERROR;
         }
 
         // No errors return success(0)
@@ -1104,7 +1062,6 @@ int ssl_cert_verify_callback(int ok, X509_STORE_CTX* store)
                 {
                         // TODO Can add check for depth here.
                         //int depth = X509_STORE_CTX_get_error_depth(store);
-
                         int err = X509_STORE_CTX_get_error(store);
                         NDBG_PRINT("ssl_cert_verify_callback Error[%d].  Reason: %s\n",
                               err, X509_verify_cert_error_string(err));
