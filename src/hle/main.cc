@@ -2371,7 +2371,7 @@ int main(int argc, char** argv)
 
                                 l_host.m_host = l_value.get("host", "NO_HOST").asString();
                                 l_host.m_hostname = l_value.get("hostname", "NO_HOSTNAME").asString();
-                                l_host.m_id = l_value.get("host", "NO_ID").asString();
+                                l_host.m_id = l_value.get("id", "NO_ID").asString();
                                 l_host.m_where = l_value.get("where", "NO_WHERE").asString();
                                 // TODO Check exist...
                                 l_host_list.push_back(l_host);

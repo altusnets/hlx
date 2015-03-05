@@ -109,11 +109,11 @@ int32_t nconn_ssl::ssl_connect(const host_info_t &a_host_info)
                 case SSL_ERROR_SYSCALL:
                 {
                         if(l_status == 0) {
-                                NCONN_ERROR("HOST[%s]: SSL_ERROR_SYSCALL %lu: %s. An EOF was observed that violates the protocol\n",
+                                NCONN_ERROR("HOST[%s]: SSL_ERROR_SYSCALL %lu: %s. An EOF was observed that violates the protocol",
                                                 m_host.c_str(),
                                                 ERR_get_error(), ERR_error_string(ERR_get_error(), NULL));
                         } else if(l_status == -1) {
-                                NCONN_ERROR("HOST[%s]: SSL_ERROR_SYSCALL %lu: %s. %s\n",
+                                NCONN_ERROR("HOST[%s]: SSL_ERROR_SYSCALL %lu: %s. %s",
                                                 m_host.c_str(),
                                                 ERR_get_error(), ERR_error_string(ERR_get_error(), NULL),
                                                 strerror(errno));
@@ -554,7 +554,7 @@ state_top:
                                 }
                                 else
                                 {
-                                        NCONN_ERROR("HOST[%s]: %s\n", m_host.c_str(),
+                                        NCONN_ERROR("HOST[%s]: %s", m_host.c_str(),
                                                         strerror(l_err));
                                 }
                                 return STATUS_ERROR;
