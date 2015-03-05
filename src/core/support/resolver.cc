@@ -40,6 +40,7 @@
 #include <netdb.h>
 #include <algorithm>
 #include <string.h>
+#include <unistd.h>
 
 
 //: ----------------------------------------------------------------------------
@@ -245,11 +246,11 @@ int32_t resolver::init(std::string addr_info_cache_db, bool a_use_cache)
         m_use_cache = a_use_cache;
         if(m_use_cache)
         {
-
                 // Init with cache file if exists
-                std::string l_db_name;
-                if(addr_info_cache_db.empty())
+                std::string l_db_name = addr_info_cache_db;
+                if(l_db_name.empty())
                 {
+                        NDBG_PRINT("Using: %s\n", l_db_name.c_str());
                         l_db_name = RESOLVER_DEFAULT_LDB_PATH;
                 }
 

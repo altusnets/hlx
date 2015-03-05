@@ -131,7 +131,7 @@ public:
                 m_stat_agg(),
                 m_response_headers(),
                 m_next_response_value(m_response_headers.begin()),
-                m_response_body(),
+                m_response_body(""),
                 m_response_status(0),
                 m_conn_info(),
                 m_id(a_id),

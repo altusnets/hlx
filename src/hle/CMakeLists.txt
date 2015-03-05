@@ -88,6 +88,7 @@ ssl
 snappy
 leveldb
 tcmalloc
+jsoncpp
 profiler
 #asan
 #efence

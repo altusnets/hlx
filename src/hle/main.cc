@@ -50,6 +50,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <getopt.h> // For getopt_long
 #include <termios.h>
@@ -61,6 +62,8 @@
 #endif
 #include <inttypes.h>
 
+// Json parser
+#include <jsoncpp/json/json.h>
 
 // Profiler
 #define ENABLE_PROFILER 1
@@ -125,7 +128,21 @@ class t_client;
 struct ssl_ctx_st;
 typedef ssl_ctx_st SSL_CTX;
 
-typedef std::list <std::string> host_list_t;
+typedef struct host_struct {
+        std::string m_host;
+        std::string m_hostname;
+        std::string m_id;
+        std::string m_where;
+
+        host_struct():
+                m_host(),
+                m_hostname(),
+                m_id(),
+                m_where()
+        {};
+} host_t;
+
+typedef std::list <host_t> host_list_t;
 typedef std::list <t_client *> t_client_list_t;
 typedef std::map <std::string, std::string> header_map_t;
 typedef std::vector<nconn *> nconn_vector_t;
@@ -274,6 +291,8 @@ std::string reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_
 {
         std::string l_responses_str = "";
         std::string l_host_color = "";
+        std::string l_server_color = "";
+        std::string l_id_color = "";
         std::string l_status_color = "";
         std::string l_header_color = "";
         std::string l_body_color = "";
@@ -282,6 +301,8 @@ std::string reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_
         if(a_color)
         {
                 l_host_color = ANSI_COLOR_FG_BLUE;
+                l_server_color = ANSI_COLOR_FG_RED;
+                l_id_color = ANSI_COLOR_FG_CYAN;
                 l_status_color = ANSI_COLOR_FG_MAGENTA;
                 l_header_color = ANSI_COLOR_FG_GREEN;
                 l_body_color = ANSI_COLOR_FG_YELLOW;
@@ -313,8 +334,48 @@ std::string reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_
                 if(a_part_map & PART_HOST)
                 {
                         if(a_pretty) if(a_output_type == OUTPUT_JSON) ARESP("    ");
-                        sprintf(l_buf, "\"%sHost%s\": \"%s\"", l_host_color.c_str(), l_off_color.c_str(), (*i_reqlet)->m_url.m_host.c_str());
+                        sprintf(l_buf, "\"%shost%s\": \"%s\"",
+                                        l_host_color.c_str(), l_off_color.c_str(),
+                                        (*i_reqlet)->m_url.m_host.c_str());
                         ARESP(l_buf);
+                        l_fbf = true;
+
+
+                        if(l_fbf) {ARESP(", "); l_fbf = false;}
+                        if(a_pretty) if(a_output_type == OUTPUT_JSON) ARESP("    ");
+                        sprintf(l_buf, "\"%sserver%s\": \"%s:%d\"",
+                                        l_server_color.c_str(), l_server_color.c_str(),
+                                        (*i_reqlet)->m_url.m_host.c_str(),
+                                        (*i_reqlet)->m_url.m_port
+                                        );
+                        ARESP(l_buf);
+                        l_fbf = true;
+
+                        if(!(*i_reqlet)->m_url.m_id.empty())
+                        {
+                                if(l_fbf) {ARESP(", "); l_fbf = false;}
+                                if(a_pretty) if(a_output_type == OUTPUT_JSON) ARESP("    ");
+                                sprintf(l_buf, "\"%sid%s\": \"%s\"",
+                                                l_id_color.c_str(), l_id_color.c_str(),
+                                                (*i_reqlet)->m_url.m_id.c_str()
+                                                );
+                                ARESP(l_buf);
+                                l_fbf = true;
+                        }
+
+                        if(!(*i_reqlet)->m_url.m_where.empty())
+                        {
+                                if(l_fbf) {ARESP(", "); l_fbf = false;}
+                                if(a_pretty) if(a_output_type == OUTPUT_JSON) ARESP("    ");
+                                sprintf(l_buf, "\"%swhere%s\": \"%s\"",
+                                                l_id_color.c_str(), l_id_color.c_str(),
+                                                (*i_reqlet)->m_url.m_where.c_str()
+                                                );
+                                ARESP(l_buf);
+                                l_fbf = true;
+                        }
+
+
                         l_fbf = true;
                 }
 
@@ -329,7 +390,7 @@ std::string reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_
                                 if((*i_reqlet)->m_response_status == 200) l_status_val_color = ANSI_COLOR_FG_GREEN;
                                 else l_status_val_color = ANSI_COLOR_FG_RED;
                         }
-                        sprintf(l_buf, "\"%sStatus-Code%s\": %s%d%s",
+                        sprintf(l_buf, "\"%sstatus-code%s\": %s%d%s",
                                         l_status_color.c_str(), l_off_color.c_str(),
                                         l_status_val_color, (*i_reqlet)->m_response_status, l_off_color.c_str());
                         ARESP(l_buf);
@@ -380,7 +441,17 @@ std::string reqlet_repo::dump_all_responses(bool a_color, bool a_pretty, output_
                 {
                         if(l_fbf) {ARESP(", "); l_fbf = false;}
                         if(a_pretty) if(a_output_type == OUTPUT_JSON) ARESP("\n    ");
-                        sprintf(l_buf, "\"%sBody%s\": %s", l_body_color.c_str(), l_off_color.c_str(), (*i_reqlet)->m_response_body.c_str());
+                        if(!(*i_reqlet)->m_response_body.empty())
+                        {
+                                sprintf(l_buf, "\"%sbody%s\": %s",
+                                                l_body_color.c_str(), l_off_color.c_str(),
+                                                (*i_reqlet)->m_response_body.c_str());
+                        }
+                        else
+                        {
+                                sprintf(l_buf, "\"%sbody%s\": \"NO_RESPONSE\"",
+                                                l_body_color.c_str(), l_off_color.c_str());
+                        }
                         ARESP(l_buf);
                         l_fbf = true;
                 }
@@ -1465,8 +1536,10 @@ int32_t add_line(FILE *a_file_ptr, host_list_t &a_host_list)
                 l_readline[l_readline_len - 1] = '\0';
                 std::string l_string(l_readline);
                 l_string.erase( std::remove_if( l_string.begin(), l_string.end(), ::isspace ), l_string.end() );
+                host_t l_host;
+                l_host.m_host = l_string;
                 if(!l_string.empty())
-                        a_host_list.push_back(l_string);
+                        a_host_list.push_back(l_host);
                 //NDBG_PRINT("READLINE: %s\n", l_readline);
         }
 
@@ -1496,16 +1569,29 @@ int32_t run(settings_struct_t &a_settings, host_list_t &a_host_list)
 
                 // Get host and port if exist
                 parsed_url l_url;
-                l_url.parse(*i_host);
+                l_url.parse(i_host->m_host);
 
-                if(strchr(i_host->c_str(), (int)':'))
+                if(strchr(i_host->m_host.c_str(), (int)':'))
                 {
                         l_reqlet->set_host(l_url.m_host);
                         l_reqlet->set_port(l_url.m_port);
                 }
                 else
                 {
-                        l_reqlet->set_host(*i_host);
+                        l_reqlet->set_host(i_host->m_host);
+                }
+
+                if(!i_host->m_hostname.empty())
+                {
+                     l_reqlet->m_url.m_hostname = i_host->m_hostname;
+                }
+                if(!i_host->m_id.empty())
+                {
+                     l_reqlet->m_url.m_id = i_host->m_id;
+                }
+                if(!i_host->m_where.empty())
+                {
+                     l_reqlet->m_url.m_where = i_host->m_where;
                 }
 
                 // Add to list
@@ -1728,6 +1814,7 @@ int main(int argc, char** argv)
                 { "version",        0, 0, 'v' },
                 { "url",            1, 0, 'u' },
                 { "host_file",      1, 0, 'f' },
+                { "host_file_json", 1, 0, 'J' },
                 { "execute",        1, 0, 'x' },
                 { "parallel",       1, 0, 'p' },
                 { "threads",        1, 0, 't' },
@@ -1761,6 +1848,7 @@ int main(int argc, char** argv)
         std::string l_gprof_file;
         std::string l_execute_line;
         std::string l_host_file_str;
+        std::string l_host_file_json_str;
         std::string l_url;
         std::string l_ai_cache;
         std::string l_output_file = "";
@@ -1805,7 +1893,7 @@ int main(int argc, char** argv)
         // -------------------------------------------------
         // Args...
         // -------------------------------------------------
-        char l_short_arg_list[] = "hvu:f:x:y:O:VNF:L:p:t:H:T:R:S:DA:Crcqso:ljPG:";
+        char l_short_arg_list[] = "hvu:f:J:x:y:O:VNF:L:p:t:H:T:R:S:DA:Crcqso:ljPG:";
         while ((l_opt = getopt_long_only(argc, argv, l_short_arg_list, l_long_options, &l_option_index)) != -1)
         {
 
@@ -1847,6 +1935,14 @@ int main(int argc, char** argv)
                 case 'f':
                 {
                         l_host_file_str = l_argument;
+                        break;
+                }
+                // ---------------------------------------
+                // Host file JSON
+                // ---------------------------------------
+                case 'J':
+                {
+                        l_host_file_json_str = l_argument;
                         break;
                 }
                 // ---------------------------------------
@@ -2199,6 +2295,100 @@ int main(int argc, char** argv)
                         return STATUS_ERROR;
                 }
         }
+        else if(!l_host_file_json_str.empty())
+        {
+                // TODO Create a function to do all this mess
+                // ---------------------------------------
+                // Check is a file
+                // TODO
+                // ---------------------------------------
+                struct stat l_stat;
+                int32_t l_status = STATUS_OK;
+                l_status = stat(l_host_file_json_str.c_str(), &l_stat);
+                if(l_status != 0)
+                {
+                        NDBG_PRINT("Error performing stat on file: %s.  Reason: %s\n", l_host_file_json_str.c_str(), strerror(errno));
+                        return STATUS_ERROR;
+                }
+
+                // Check if is regular file
+                if(!(l_stat.st_mode & S_IFREG))
+                {
+                        NDBG_PRINT("Error opening file: %s.  Reason: is NOT a regular file\n", l_host_file_json_str.c_str());
+                        return STATUS_ERROR;
+                }
+
+                // ---------------------------------------
+                // Open file...
+                // ---------------------------------------
+                FILE * l_file;
+                l_file = fopen(l_host_file_json_str.c_str(),"r");
+                if (NULL == l_file)
+                {
+                        NDBG_PRINT("Error opening file: %s.  Reason: %s\n", l_host_file_json_str.c_str(), strerror(errno));
+                        return STATUS_ERROR;
+                }
+
+                // ---------------------------------------
+                // Read in file...
+                // ---------------------------------------
+                int32_t l_size = l_stat.st_size;
+                int32_t l_read_size;
+                char *l_buf = (char *)malloc(sizeof(char)*l_size);
+                l_read_size = fread(l_buf, 1, l_size, l_file);
+                if(l_read_size != l_size)
+                {
+                        NDBG_PRINT("Error performing fread.  Reason: %s [%d:%d]\n", strerror(errno), l_read_size, l_size);
+                        return STATUS_ERROR;
+                }
+                std::string l_buf_str = l_buf;
+
+                Json::Value l_json_value(Json::objectValue);
+                Json::Reader l_json_reader;
+                bool l_result = l_json_reader.parse(l_buf_str, l_json_value);
+                if (!l_result)
+                {
+                        NDBG_PRINT("Failed to parse JSON document: %s. Reason: %s\n", l_host_file_json_str.c_str(), l_json_reader.getFormattedErrorMessages().c_str());
+                        fclose(l_file);
+                        // Best effort -not checking return cuz we outtie
+                        return STATUS_ERROR;
+                }
+
+                // For each line add
+                for( Json::ValueIterator itr = l_json_value.begin() ; itr != l_json_value.end() ; itr++ )
+                {
+                        const Json::Value &l_value = (*itr);
+
+                        if(l_value.isObject())
+                        {
+                                host_t l_host;
+
+                                //
+                                // "host" : "irobdownload.blob.core.windows.net:443",
+                                // "hostname" : "irobdownload.blob.core.windows.net",
+                                // "id" : "DE4D",
+                                // "where" : "edge"
+
+                                l_host.m_host = l_value.get("host", "NO_HOST").asString();
+                                l_host.m_hostname = l_value.get("hostname", "NO_HOSTNAME").asString();
+                                l_host.m_id = l_value.get("host", "NO_ID").asString();
+                                l_host.m_where = l_value.get("where", "NO_WHERE").asString();
+                                // TODO Check exist...
+                                l_host_list.push_back(l_host);
+                        }
+
+                }
+
+                // ---------------------------------------
+                // Close file...
+                // ---------------------------------------
+                l_status = fclose(l_file);
+                if (STATUS_OK != l_status)
+                {
+                        NDBG_PRINT("Error performing fclose.  Reason: %s\n", strerror(errno));
+                        return STATUS_ERROR;
+                }
+        }
         // Read from stdin
         else
         {
@@ -2209,13 +2399,12 @@ int main(int argc, char** argv)
                         return STATUS_ERROR;
                 }
         }
-
         if(l_settings.m_verbose)
         {
                 NDBG_PRINT("Showing hostname list:\n");
                 for(host_list_t::iterator i_host = l_host_list.begin(); i_host != l_host_list.end(); ++i_host)
                 {
-                        NDBG_OUTPUT("%s\n", i_host->c_str());
+                        NDBG_OUTPUT("%s\n", i_host->m_host.c_str());
                 }
         }
 
@@ -2248,7 +2437,8 @@ int main(int argc, char** argv)
                                         l_settings.m_ssl_options,     // ctx options
                                         l_settings.m_ssl_ca_file,     // ctx ca file
                                         l_settings.m_ssl_ca_path);    // ctx ca path
-        if(NULL == l_settings.m_ssl_ctx) {
+        if(NULL == l_settings.m_ssl_ctx)
+        {
                 NDBG_PRINT("Error: performing ssl_init with cipher_list: %s\n", l_settings.m_cipher_list_str.c_str());
                 return STATUS_ERROR;
         }
