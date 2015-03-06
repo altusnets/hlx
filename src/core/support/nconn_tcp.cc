@@ -75,7 +75,7 @@ int32_t nconn_tcp::setup_socket(const host_info_t &a_host_info)
 
         if (m_fd < 0)
         {
-                NDBG_PRINT("Error creating socket. Reason: %s\n", strerror(errno));
+                NCONN_ERROR("HOST[%s]: Error creating socket. Reason: %s\n", m_host.c_str(), strerror(errno));
                 return STATUS_ERROR;
         }
 
@@ -108,13 +108,13 @@ int32_t nconn_tcp::setup_socket(const host_info_t &a_host_info)
         const int flags = fcntl(m_fd, F_GETFL, 0);
         if (flags == -1)
         {
-                NDBG_PRINT("Error getting flags for fd. Reason: %s\n", strerror(errno));
+                NCONN_ERROR("HOST[%s]: Error getting flags for fd. Reason: %s\n", m_host.c_str(), strerror(errno));
                 return STATUS_ERROR;
         }
 
         if (fcntl(m_fd, F_SETFL, flags | O_NONBLOCK) < 0)
         {
-                NDBG_PRINT("Error setting fd to non-block mode. Reason: %s\n", strerror(errno));
+                NCONN_ERROR("HOST[%s]: Error setting fd to non-block mode. Reason: %s\n", m_host.c_str(), strerror(errno));
                 return STATUS_ERROR;
         }
 
@@ -169,7 +169,7 @@ int32_t nconn_tcp::send_request(bool is_reuse)
                 l_status = write(m_fd, m_req_buf + l_bytes_written, m_req_buf_len - l_bytes_written);
                 if(l_status < 0)
                 {
-                        NDBG_PRINT("Error: performing write.  Reason: %s.\n", strerror(errno));
+                        NCONN_ERROR("HOST[%s]: Error: performing write.  Reason: %s.\n", m_host.c_str(), strerror(errno));
                         return STATUS_ERROR;
                 }
                 l_bytes_written += l_status;
@@ -260,7 +260,7 @@ int32_t nconn_tcp::receive_response(void)
                 {
                         if(m_verbose)
                         {
-                                NDBG_PRINT("%s: Error: parse error.  Reason: %s: %s\n",
+                                NCONN_ERROR("HOST[%s]: Error: parse error.  Reason: %s: %s\n",
                                                 m_host.c_str(),
                                                 //"","");
                                                 http_errno_name((enum http_errno)m_http_parser.http_errno),
@@ -365,7 +365,7 @@ state_top:
                                             EVR_FILE_ATTR_MASK_STATUS_ERROR,
                                             this))
                 {
-                        NDBG_PRINT("Error: Couldn't add socket file descriptor\n");
+                        NCONN_ERROR("HOST[%s]: Error: Couldn't add socket file descriptor\n", m_host.c_str());
                         return STATUS_ERROR;
                 }
 
@@ -415,19 +415,19 @@ state_top:
                                 l_errlen = sizeof(l_err);
                                 if (getsockopt(m_fd, SOL_SOCKET, SO_ERROR, (void*) &l_err, &l_errlen) < 0)
                                 {
-                                        NDBG_PRINT("%s: unknown connect error\n",
+                                        NCONN_ERROR("HOST[%s]: Error performing getsockopt. Unknown connect error\n",
                                                         m_host.c_str());
                                 }
                                 else
                                 {
-                                        NDBG_PRINT("%s: %s\n", m_host.c_str(),
+                                        NCONN_ERROR("HOST[%s]: Error performing getsockopt. %s\n", m_host.c_str(),
                                                         strerror(l_err));
                                 }
                                 return STATUS_ERROR;
                         }
                         case ECONNREFUSED:
                         {
-                                NDBG_PRINT("Error Connection refused for host: %s. Reason: %s\n", m_host.c_str(), strerror(errno));
+                                NCONN_ERROR("HOST[%s]: Error Connection refused. Reason: %s\n", m_host.c_str(), strerror(errno));
                                 return STATUS_ERROR;
                         }
                         case EAGAIN:
@@ -442,7 +442,7 @@ state_top:
                                                             EVR_FILE_ATTR_MASK_WRITE|EVR_FILE_ATTR_MASK_STATUS_ERROR,
                                                             this))
                                 {
-                                        NDBG_PRINT("Error: Couldn't add socket file descriptor\n");
+                                        NCONN_ERROR("HOST[%s]: Error: Couldn't add socket file descriptor\n", m_host.c_str());
                                         return STATUS_ERROR;
                                 }
                                 return STATUS_OK;
@@ -459,14 +459,14 @@ state_top:
                                 }
                                 else
                                 {
-                                        NDBG_PRINT("Error connect() for host: %s.  Reason: %s\n", m_host.c_str(), strerror(errno));
+                                        NCONN_ERROR("HOST[%s]: Error connect().  Reason: %s\n", m_host.c_str(), strerror(errno));
                                         return STATUS_ERROR;
                                 }
                                 break;
                         }
                         default:
                         {
-                                NDBG_PRINT("Error Unkown. Reason: %s\n", strerror(errno));
+                                NCONN_ERROR("HOST[%s]: Error Unkown. Reason: %s\n", m_host.c_str(), strerror(errno));
                                 return STATUS_ERROR;
                         }
                         }
@@ -496,7 +496,7 @@ state_top:
                                             EVR_FILE_ATTR_MASK_READ|EVR_FILE_ATTR_MASK_STATUS_ERROR,
                                             this))
                 {
-                        NDBG_PRINT("Error: Couldn't add socket file descriptor\n");
+                        NCONN_ERROR("HOST[%s]: Error: Couldn't add socket file descriptor\n", m_host.c_str());
                         return STATUS_ERROR;
                 }
 
@@ -518,7 +518,7 @@ state_top:
 			l_request_status = send_request(false);
 			if(l_request_status != STATUS_OK)
 			{
-				NDBG_PRINT("Error: performing send_request\n");
+			        NCONN_ERROR("HOST[%s]: Error: performing send_request\n", m_host.c_str());
 				return STATUS_ERROR;
 			}
         	}
@@ -541,7 +541,7 @@ state_top:
                 //NDBG_PRINT("%sCNST_READING%s: receive_response(): total: %d\n", ANSI_COLOR_BG_CYAN, ANSI_COLOR_OFF, (int)m_stat.m_total_bytes);
                 if(l_read_status < 0)
                 {
-                        NDBG_PRINT("Error: performing receive_response\n");
+                        NCONN_ERROR("HOST[%s]: Error: performing receive_response\n", m_host.c_str());
                         return STATUS_ERROR;
                 }
                 return l_read_status;

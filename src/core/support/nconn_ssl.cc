@@ -214,7 +214,7 @@ int32_t nconn_ssl::send_request(bool is_reuse)
                 l_status = SSL_write(m_ssl, m_req_buf + l_bytes_written, m_req_buf_len - l_bytes_written);
                 if(l_status < 0)
                 {
-                        NDBG_PRINT("HOST[%s]: Error: performing SSL_write.\n", m_host.c_str());
+                        NCONN_ERROR("HOST[%s]: Error: performing SSL_write.\n", m_host.c_str());
                         return STATUS_ERROR;
                 }
                 l_bytes_written += l_status;
@@ -272,7 +272,7 @@ int32_t nconn_ssl::receive_response(void)
                 {
                         if(m_verbose)
                         {
-                                NDBG_PRINT("HOST[%s]: %sl_bytes_read%s[%d] <= 0 total = %u--error: %s\n",
+                                NCONN_ERROR("HOST[%s]: %sl_bytes_read%s[%d] <= 0 total = %u--error: %s\n",
                                                 m_host.c_str(),
                                                 ANSI_COLOR_FG_RED, ANSI_COLOR_OFF, l_bytes_read, l_total_bytes_read, strerror(errno));
                         }
@@ -309,7 +309,7 @@ int32_t nconn_ssl::receive_response(void)
                 {
                         if(m_verbose)
                         {
-                                NDBG_PRINT("HOST[%s]: Error: parse error.  Reason: %s: %s\n",
+                                NCONN_ERROR("HOST[%s]: Error: parse error.  Reason: %s: %s\n",
                                                 m_host.c_str(),
                                                 //"","");
                                                 http_errno_name((enum http_errno)m_http_parser.http_errno),
@@ -407,7 +407,7 @@ int32_t nconn_ssl::init(void)
         {
                 if (1 != SSL_set_cipher_list(m_ssl, m_ssl_opt_cipher_str.c_str()))
                 {
-                	NDBG_PRINT("HOST[%s]: Failed to set ssl cipher list: %s\n", m_host.c_str(), m_ssl_opt_cipher_str.c_str());
+                        NCONN_ERROR("HOST[%s]: Failed to set ssl cipher list: %s\n", m_host.c_str(), m_ssl_opt_cipher_str.c_str());
                         return STATUS_ERROR;
                 }
         }
@@ -418,7 +418,7 @@ int32_t nconn_ssl::init(void)
                 // const_cast to work around SSL's use of arg -this call does not change buffer argument
                 if (1 != SSL_set_tlsext_host_name(m_ssl, m_ssl_opt_tlsext_hostname.c_str()))
                 {
-                	NDBG_PRINT("HOST[%s]: Failed to set tls hostname: %s\n", m_host.c_str(), m_ssl_opt_tlsext_hostname.c_str());
+                        NCONN_ERROR("HOST[%s]: Failed to set tls hostname: %s\n", m_host.c_str(), m_ssl_opt_tlsext_hostname.c_str());
                         return false;
                 }
         }
@@ -929,7 +929,7 @@ static int validate_server_certificate_hostname(X509* a_cert, const char* a_host
                 }
         }
 
-        NDBG_PRINT("HOST[%s]: Hostname match failed.\n", a_host);
+        NDBG_PRINT("HOST[%s]: Error Hostname match failed.\n", a_host);
         return -1;
 
 }
@@ -1065,7 +1065,6 @@ int ssl_cert_verify_callback(int ok, X509_STORE_CTX* store)
                         int err = X509_STORE_CTX_get_error(store);
                         NDBG_PRINT("ssl_cert_verify_callback Error[%d].  Reason: %s\n",
                               err, X509_verify_cert_error_string(err));
-
                 }
         }
         return ok;
