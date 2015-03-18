@@ -25,6 +25,7 @@
 //: Includes
 //: ----------------------------------------------------------------------------
 #include "hlx_client.h"
+#include "reqlet.h"
 #include "util.h"
 #include "ssl_util.h"
 #include "ndebug.h"
@@ -202,6 +203,7 @@ public:
         int32_t set_header(const std::string &a_header_key, const std::string &a_header_val);
         void set_ssl_ctx(SSL_CTX * a_ssl_ctx) { m_settings.m_ssl_ctx = a_ssl_ctx;};
         uint32_t get_timeout_s(void) { return m_settings.m_timeout_s;};
+        void get_stats_copy(tag_stat_map_t &ao_tag_stat_map);
 
         // -------------------------------------------------
         // Public members
@@ -920,6 +922,24 @@ int32_t t_client::set_header(const std::string &a_header_key, const std::string 
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+void t_client::get_stats_copy(tag_stat_map_t &ao_tag_stat_map)
+{
+        // TODO FIX
+        // Do we need this function if have a reqlet-repo
+#if 0
+        // TODO Need to make this threadsafe -spinlock perhaps...
+        for(reqlet_list_t::iterator i_reqlet = m_reqlet_avail_list.begin(); i_reqlet != m_reqlet_avail_list.end(); ++i_reqlet)
+        {
+                ao_tag_stat_map[(*i_reqlet)->get_label()] = (*i_reqlet)->m_stat_agg;
+        }
+#endif
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
 int hlx_client::init(void)
 {
 
@@ -1143,6 +1163,27 @@ void hlx_client::set_url(const std::string &a_url)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+int32_t hlx_client::set_url_file(const std::string &a_url_file)
+{
+        m_url_file = a_url_file;
+        return HLX_CLIENT_STATUS_OK;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::set_wildcarding(bool a_val)
+{
+        m_wildcarding = a_val;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
 int hlx_client::set_host_list(host_list_t &a_host_list)
 {
         // Create the reqlet list
@@ -1304,6 +1345,56 @@ void hlx_client::set_num_parallel(uint32_t a_num_parallel)
 void hlx_client::set_show_summary(bool a_val)
 {
         m_show_summary = a_val;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::set_run_time_s(int32_t a_val)
+{
+        m_run_time_s = a_val;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::set_end_fetches(int32_t a_val)
+{
+        m_end_fetches = a_val;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::set_max_reqs_per_conn(int32_t a_val)
+{
+        m_max_reqs_per_conn = a_val;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::set_rate(int32_t a_val)
+{
+        m_rate = a_val;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::set_request_mode(request_mode_t a_mode)
+{
+        m_request_mode = a_mode;
 }
 
 //: ----------------------------------------------------------------------------
@@ -1473,6 +1564,9 @@ hlx_client::hlx_client(void):
 
         // Run settings
         m_url(),
+        m_url_file(),
+        m_wildcarding(false),
+
         m_header_map(),
         m_use_ai_cache(true),
         m_ai_cache(),
@@ -1484,6 +1578,16 @@ hlx_client::hlx_client(void):
         m_timeout_s(10),
         m_connect_only(false),
         m_show_summary(false),
+
+        m_rate(-1),
+        m_end_fetches(-1),
+        m_max_reqs_per_conn(1),
+        m_run_time_s(-1),
+        m_request_mode(REQUEST_MODE_ROUND_ROBIN),
+
+        m_start_time_ms(),
+        m_last_display_time_ms(),
+        m_last_stat(NULL),
 
         // Socket options
         m_sock_opt_recv_buf_size(0),
@@ -1525,6 +1629,8 @@ hlx_client::hlx_client(void):
 {
         // Init mutex
         pthread_mutex_init(&m_mutex, NULL);
+
+        m_last_stat = new total_stat_agg_struct();
 
 };
 
@@ -1568,6 +1674,11 @@ hlx_client::~hlx_client(void)
         // TODO Deprecated???
         //EVP_cleanup();
 
+        if(m_last_stat)
+        {
+                delete m_last_stat;
+                m_last_stat = NULL;
+        }
 }
 
 //: ----------------------------------------------------------------------------
@@ -1766,6 +1877,379 @@ std::string hlx_client::dump_all_responses(bool a_color, bool a_pretty, output_t
         }
 
         return l_responses_str;
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+static void show_total_agg_stat(std::string &a_tag,
+        const total_stat_agg_t &a_stat,
+        double a_time_elapsed_s,
+        uint32_t a_max_parallel,
+        bool a_color)
+{
+        if(a_color)
+        printf("| %sRESULTS%s:             %s%s%s\n", ANSI_COLOR_FG_CYAN, ANSI_COLOR_OFF, ANSI_COLOR_FG_YELLOW, a_tag.c_str(), ANSI_COLOR_OFF);
+        else
+        printf("| RESULTS:             %s\n", a_tag.c_str());
+
+        printf("| fetches:             %lu\n", a_stat.m_total_reqs);
+        printf("| max parallel:        %u\n", a_max_parallel);
+        printf("| bytes:               %e\n", (double)a_stat.m_total_bytes);
+        printf("| seconds:             %f\n", a_time_elapsed_s);
+        printf("| mean bytes/conn:     %f\n", ((double)a_stat.m_total_bytes)/((double)a_stat.m_total_reqs));
+        printf("| fetches/sec:         %f\n", ((double)a_stat.m_total_reqs)/(a_time_elapsed_s));
+        printf("| bytes/sec:           %e\n", ((double)a_stat.m_total_bytes)/a_time_elapsed_s);
+
+#define SHOW_XSTAT_LINE(_tag, stat)\
+        do {\
+        printf("| %-16s %12.6f mean, %12.6f max, %12.6f min, %12.6f stdev, %12.6f var\n",\
+               _tag,                                                    \
+               stat.mean()/1000.0,                                      \
+               stat.max()/1000.0,                                       \
+               stat.min()/1000.0,                                       \
+               stat.stdev()/1000.0,                                     \
+               stat.var()/1000.0);                                      \
+        } while(0)
+
+        SHOW_XSTAT_LINE("ms/connect:", a_stat.m_stat_us_connect);
+        SHOW_XSTAT_LINE("ms/1st-response:", a_stat.m_stat_us_first_response);
+        SHOW_XSTAT_LINE("ms/download:", a_stat.m_stat_us_download);
+        SHOW_XSTAT_LINE("ms/end2end:", a_stat.m_stat_us_end_to_end);
+
+        if(a_color)
+                printf("| %sHTTP response codes%s: \n", ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF);
+        else
+                printf("| HTTP response codes: \n");
+
+        for(status_code_count_map_t::const_iterator i_status_code = a_stat.m_status_code_count_map.begin();
+                        i_status_code != a_stat.m_status_code_count_map.end();
+                ++i_status_code)
+        {
+                if(a_color)
+                printf("| %s%3d%s -- %u\n", ANSI_COLOR_FG_MAGENTA, i_status_code->first, ANSI_COLOR_OFF, i_status_code->second);
+                else
+                printf("| %3d -- %u\n", i_status_code->first, i_status_code->second);
+        }
+
+        // Done flush...
+        printf("\n");
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::display_results(double a_elapsed_time,
+                                 bool a_show_breakdown_flag)
+{
+
+        tag_stat_map_t l_tag_stat_map;
+        total_stat_agg_t l_total;
+
+        // Get stats
+        get_stats(l_total, a_show_breakdown_flag, l_tag_stat_map);
+
+        std::string l_tag;
+        // TODO Fix elapse and max parallel
+        l_tag = "ALL";
+        show_total_agg_stat(l_tag, l_total, a_elapsed_time, m_num_parallel, m_color);
+
+        // -------------------------------------------
+        // Optional Breakdown
+        // -------------------------------------------
+        if(a_show_breakdown_flag)
+        {
+                for(tag_stat_map_t::iterator i_stat = l_tag_stat_map.begin();
+                                i_stat != l_tag_stat_map.end();
+                                ++i_stat)
+                {
+                        l_tag = i_stat->first;
+                        show_total_agg_stat(l_tag, i_stat->second, a_elapsed_time, m_num_parallel, m_color);
+                }
+        }
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+static void show_total_agg_stat_legacy(std::string &a_tag,
+                                       const total_stat_agg_t &a_stat,
+                                       std::string &a_sep,
+                                       double a_time_elapsed_s,
+                                       uint32_t a_max_parallel)
+{
+        printf("%s: ", a_tag.c_str());
+        printf("%lu fetches, ", a_stat.m_total_reqs);
+        printf("%u max parallel, ", a_max_parallel);
+        printf("%e bytes, ", (double)a_stat.m_total_bytes);
+        printf("in %f seconds, ", a_time_elapsed_s);
+        printf("%s", a_sep.c_str());
+
+        printf("%f mean bytes/connection, ", ((double)a_stat.m_total_bytes)/((double)a_stat.m_total_reqs));
+        printf("%s", a_sep.c_str());
+
+        printf("%f fetches/sec, %e bytes/sec", ((double)a_stat.m_total_reqs)/(a_time_elapsed_s), ((double)a_stat.m_total_bytes)/a_time_elapsed_s);
+        printf("%s", a_sep.c_str());
+
+#define SHOW_XSTAT_LINE_LEGACY(_tag, stat)\
+        printf("%s %.6f mean, %.6f max, %.6f min, %.6f stdev",\
+               _tag,                                          \
+               stat.mean()/1000.0,                            \
+               stat.max()/1000.0,                             \
+               stat.min()/1000.0,                             \
+               stat.stdev()/1000.0);                          \
+        printf("%s", a_sep.c_str())
+
+        SHOW_XSTAT_LINE_LEGACY("msecs/connect:", a_stat.m_stat_us_connect);
+        SHOW_XSTAT_LINE_LEGACY("msecs/first-response:", a_stat.m_stat_us_first_response);
+        SHOW_XSTAT_LINE_LEGACY("msecs/download:", a_stat.m_stat_us_download);
+        SHOW_XSTAT_LINE_LEGACY("msecs/end2end:", a_stat.m_stat_us_end_to_end);
+
+        printf("HTTP response codes: ");
+        if(a_sep == "\n")
+                printf("%s", a_sep.c_str());
+
+        for(status_code_count_map_t::const_iterator i_status_code = a_stat.m_status_code_count_map.begin();
+                        i_status_code != a_stat.m_status_code_count_map.end();
+                ++i_status_code)
+        {
+                printf("code %d -- %u, ", i_status_code->first, i_status_code->second);
+        }
+
+        // Done flush...
+        printf("\n");
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::get_stats(total_stat_agg_t &ao_all_stats,
+                           bool a_get_breakdown,
+                           tag_stat_map_t &ao_breakdown_stats)
+{
+        // -------------------------------------------
+        // Aggregate
+        // -------------------------------------------
+        for(t_client_list_t::iterator i_c = m_t_client_list.begin();
+                        i_c != m_t_client_list.end();
+                        ++i_c)
+        {
+
+                // Grab a copy of the stats
+
+                // TODO Can we pull this out of the reqlet repo instead???
+                tag_stat_map_t l_copy;
+                (*i_c)->get_stats_copy(l_copy);
+                for(tag_stat_map_t::iterator i_reqlet = l_copy.begin(); i_reqlet != l_copy.end(); ++i_reqlet)
+                {
+                        if(a_get_breakdown)
+                        {
+                                std::string l_tag = i_reqlet->first;
+                                tag_stat_map_t::iterator i_stat;
+                                if((i_stat = ao_breakdown_stats.find(l_tag)) == ao_breakdown_stats.end())
+                                {
+                                        ao_breakdown_stats[l_tag] = i_reqlet->second;
+                                }
+                                else
+                                {
+                                        // Add to existing
+                                        add_to_total_stat_agg(i_stat->second, i_reqlet->second);
+                                }
+                        }
+
+                        // Add to total
+                        add_to_total_stat_agg(ao_all_stats, i_reqlet->second);
+                }
+        }
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::display_results_http_load_style(double a_elapsed_time,
+                                                 bool a_show_breakdown_flag,
+                                                 bool a_one_line_flag)
+{
+
+        tag_stat_map_t l_tag_stat_map;
+        total_stat_agg_t l_total;
+
+        // Get stats
+        get_stats(l_total, a_show_breakdown_flag, l_tag_stat_map);
+
+        std::string l_tag;
+        // Separator
+        std::string l_sep = "\n";
+        if(a_one_line_flag) l_sep = "||";
+
+        // TODO Fix elapse and max parallel
+        l_tag = "State";
+        show_total_agg_stat_legacy(l_tag, l_total, l_sep, a_elapsed_time, m_num_parallel);
+
+        // -------------------------------------------
+        // Optional Breakdown
+        // -------------------------------------------
+        if(a_show_breakdown_flag)
+        {
+                for(tag_stat_map_t::iterator i_stat = l_tag_stat_map.begin();
+                                i_stat != l_tag_stat_map.end();
+                                ++i_stat)
+                {
+                        l_tag = "[";
+                        l_tag += i_stat->first;
+                        l_tag += "]";
+                        show_total_agg_stat_legacy(l_tag, i_stat->second, l_sep, a_elapsed_time, m_num_parallel);
+                }
+        }
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t hlx_client::get_stats_json(char *l_json_buf, uint32_t l_json_buf_max_len)
+{
+
+        tag_stat_map_t l_tag_stat_map;
+        total_stat_agg_t l_total;
+
+        uint64_t l_time_ms = get_time_ms();
+        // Get stats
+        get_stats(l_total, true, l_tag_stat_map);
+
+        int l_cur_offset = 0;
+        l_cur_offset += snprintf(l_json_buf + l_cur_offset, l_json_buf_max_len - l_cur_offset,"{\"data\": [");
+        bool l_first_stat = true;
+        for(tag_stat_map_t::iterator i_agg_stat = l_tag_stat_map.begin();
+                        i_agg_stat != l_tag_stat_map.end();
+                        ++i_agg_stat)
+        {
+
+                if(l_first_stat) l_first_stat = false;
+                else
+                        l_cur_offset += snprintf(l_json_buf + l_cur_offset, l_json_buf_max_len - l_cur_offset,",");
+
+                l_cur_offset += snprintf(l_json_buf + l_cur_offset, l_json_buf_max_len - l_cur_offset,
+                                "{\"key\": \"%s\", \"value\": ",
+                                i_agg_stat->first.c_str());
+
+                l_cur_offset += snprintf(l_json_buf + l_cur_offset, l_json_buf_max_len - l_cur_offset,
+                                "{\"%s\": %" PRIu64 ", \"%s\": %" PRIu64 "}",
+                                "count", (uint64_t)(i_agg_stat->second.m_num_conn_completed),
+                                "time", (uint64_t)(l_time_ms));
+
+                l_cur_offset += snprintf(l_json_buf + l_cur_offset, l_json_buf_max_len - l_cur_offset,"}");
+        }
+
+        l_cur_offset += snprintf(l_json_buf + l_cur_offset, l_json_buf_max_len - l_cur_offset,"]}");
+
+
+        return l_cur_offset;
+
+}
+
+
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::display_results_line_desc(void)
+{
+        printf("+-----------/-----------+-----------+-----------+--------------+-----------+-------------+-----------+\n");
+        if(m_color)
+        {
+        printf("| %s%9s%s / %s%9s%s | %s%9s%s | %s%9s%s | %s%12s%s | %9s | %11s | %9s |\n",
+                        ANSI_COLOR_FG_GREEN, "Cmpltd", ANSI_COLOR_OFF,
+                        ANSI_COLOR_FG_BLUE, "Total", ANSI_COLOR_OFF,
+                        ANSI_COLOR_FG_MAGENTA, "IdlKil", ANSI_COLOR_OFF,
+                        ANSI_COLOR_FG_RED, "Errors", ANSI_COLOR_OFF,
+                        ANSI_COLOR_FG_YELLOW, "kBytes Recvd", ANSI_COLOR_OFF,
+                        "Elapsed",
+                        "Req/s",
+                        "MB/s");
+        }
+        else
+        {
+                printf("| %9s / %9s | %9s | %9s | %12s | %9s | %11s | %9s |\n",
+                                "Cmpltd",
+                                "Total",
+                                "IdlKil",
+                                "Errors",
+                                "kBytes Recvd",
+                                "Elapsed",
+                                "Req/s",
+                                "MB/s");
+        }
+        printf("+-----------/-----------+-----------+-----------+--------------+-----------+-------------+-----------+\n");
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::display_results_line(void)
+{
+
+        total_stat_agg_t l_total;
+        tag_stat_map_t l_unused;
+        uint64_t l_cur_time_ms = get_time_ms();
+
+        // Get stats
+        get_stats(l_total, false, l_unused);
+
+        double l_reqs_per_s = ((double)(l_total.m_num_conn_completed - m_last_stat->m_num_conn_completed)*1000.0) /
+                        ((double)(l_cur_time_ms - m_last_display_time_ms));
+        double l_kb_per_s = ((double)(l_total.m_num_bytes_read - m_last_stat->m_num_bytes_read)*1000.0/1024) /
+                        ((double)(l_cur_time_ms - m_last_display_time_ms));
+
+        if(m_color)
+        {
+                        printf("| %s%9" PRIu64 "%s / %s%9" PRIi64 "%s | %s%9" PRIu64 "%s | %s%9" PRIu64 "%s | %s%12.2f%s | %8.2fs | %10.2fs | %8.2fs |\n",
+                                        ANSI_COLOR_FG_GREEN, l_total.m_num_conn_completed, ANSI_COLOR_OFF,
+                                        ANSI_COLOR_FG_BLUE, l_total.m_num_conn_completed, ANSI_COLOR_OFF,
+                                        ANSI_COLOR_FG_MAGENTA, l_total.m_num_idle_killed, ANSI_COLOR_OFF,
+                                        ANSI_COLOR_FG_RED, l_total.m_num_errors, ANSI_COLOR_OFF,
+                                        ANSI_COLOR_FG_YELLOW, ((double)(l_total.m_num_bytes_read))/(1024.0), ANSI_COLOR_OFF,
+                                        ((double)(get_delta_time_ms(m_start_time_ms))) / 1000.0,
+                                        l_reqs_per_s,
+                                        l_kb_per_s/1024.0
+                                        );
+        }
+        else
+        {
+                printf("| %9" PRIu64 " / %9" PRIi64 " | %9" PRIu64 " | %9" PRIu64 " | %12.2f | %8.2fs | %10.2fs | %8.2fs |\n",
+                                l_total.m_num_conn_completed,
+                                l_total.m_num_conn_completed,
+                                l_total.m_num_idle_killed,
+                                l_total.m_num_errors,
+                                ((double)(l_total.m_num_bytes_read))/(1024.0),
+                                ((double)(get_delta_time_ms(m_start_time_ms)) / 1000.0),
+                                l_reqs_per_s,
+                                l_kb_per_s/1024.0
+                                );
+
+        }
+
+        m_last_display_time_ms = get_time_ms();
+        *m_last_stat = l_total;
 
 }
 

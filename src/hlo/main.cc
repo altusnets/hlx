@@ -25,7 +25,6 @@
 //: Includes
 //: ----------------------------------------------------------------------------
 #include "hlo.h"
-#include "t_microhttpd.h"
 #include "util.h"
 
 #include <string.h>
@@ -61,11 +60,18 @@
 #include <google/profiler.h>
 #endif
 
+#include <microhttpd.h>
+
 //: ----------------------------------------------------------------------------
 //: Constants
 //: ----------------------------------------------------------------------------
-#define NB_ENABLE  1
-#define NB_DISABLE 0
+// Version
+#define HLO_VERSION_MAJOR 0
+#define HLO_VERSION_MINOR 0
+#define HLO_VERSION_MACRO 1
+#define HLO_VERSION_PATCH "alpha"
+
+#define RESP_BUFFER_SIZE (1024*1024)
 
 //: ----------------------------------------------------------------------------
 //: Types
@@ -80,6 +86,7 @@ typedef struct settings_struct
         bool m_verbose;
         bool m_color;
         bool m_quiet;
+        hlo *m_hlo;
 
         // ---------------------------------
         // Defaults...
@@ -87,7 +94,8 @@ typedef struct settings_struct
         settings_struct() :
                 m_verbose(false),
                 m_color(false),
-                m_quiet(false)
+                m_quiet(false),
+                m_hlo(NULL)
         {}
 
 } settings_struct_t;
@@ -108,24 +116,238 @@ typedef struct thread_args_struct
 } thread_args_struct_t;
 
 //: ----------------------------------------------------------------------------
-//: Forward Decls
+//: Globals
 //: ----------------------------------------------------------------------------
-void command_exec(thread_args_struct_t &a_thread_args);
+struct MHD_Daemon *g_daemon;
+static char g_char_buf[RESP_BUFFER_SIZE];
+static hlo *g_hlo = NULL;
 
 //: ----------------------------------------------------------------------------
-//: \details: Print the version.
+//: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+static int
+answer_to_connection (void *cls,
+                struct MHD_Connection *connection,
+                const char *url,
+                const char *method,
+                const char *version,
+                const char *upload_data,
+                size_t *upload_data_size,
+                void **con_cls)
+{
+
+        g_hlo->get_stats_json(g_char_buf, RESP_BUFFER_SIZE);
+
+        struct MHD_Response *response;
+        int ret;
+
+        response = MHD_create_response_from_data(strlen(g_char_buf),
+                (void *) g_char_buf,
+                0,
+                0);
+
+        ret = MHD_add_response_header(response, "Content-Type", "application/json");
+        ret = MHD_add_response_header(response, "Access-Control-Allow-Origin", "*");
+        ret = MHD_add_response_header(response, "Access-Control-Allow-Credentials", "true");
+        ret = MHD_add_response_header(response, "Access-Control-Max-Age", "86400");
+
+        ret = MHD_queue_response(connection, 200, response);
+
+        MHD_destroy_response(response);
+
+        return ret;
+}
+
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t start_microhttpd(int32_t a_port)
+{
+
+        g_daemon = MHD_start_daemon (MHD_USE_SELECT_INTERNALLY,
+                        a_port,
+                        NULL,
+                        NULL,
+                        &answer_to_connection,
+                        NULL,
+                        MHD_OPTION_END);
+        if (NULL == g_daemon)
+                return -1;
+
+        return 0;
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t stop_microhttpd(void)
+{
+
+        MHD_stop_daemon (g_daemon);
+
+        return 0;
+}
+
+//: ----------------------------------------------------------------------------
+//: Command
+//: TODO Refactor
+//: ----------------------------------------------------------------------------
+#define NB_ENABLE  1
+#define NB_DISABLE 0
+
 bool g_test_finished = false;
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int kbhit()
+{
+        struct timeval tv;
+        fd_set fds;
+        tv.tv_sec = 0;
+        tv.tv_usec = 0;
+        FD_ZERO(&fds);
+        FD_SET(STDIN_FILENO, &fds);
+        //STDIN_FILENO is 0
+        select(STDIN_FILENO + 1, &fds, NULL, NULL, &tv);
+        return FD_ISSET(STDIN_FILENO, &fds);
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void nonblock(int state)
+{
+        struct termios ttystate;
+
+        //get the terminal state
+        tcgetattr(STDIN_FILENO, &ttystate);
+
+        if (state == NB_ENABLE)
+        {
+                //turn off canonical mode
+                ttystate.c_lflag &= ~ICANON;
+                //minimum of number input read.
+                ttystate.c_cc[VMIN] = 1;
+        } else if (state == NB_DISABLE)
+        {
+                //turn on canonical mode
+                ttystate.c_lflag |= ICANON;
+        }
+        //set the terminal attributes.
+        tcsetattr(STDIN_FILENO, TCSANOW, &ttystate);
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void command_exec(thread_args_struct_t &a_thread_args)
+{
+        int i = 0;
+        char l_cmd = ' ';
+        bool l_sent_stop = false;
+        hlo *l_hlo = a_thread_args.m_settings.m_hlo;
+        bool l_first_time = true;
+
+        nonblock(NB_ENABLE);
+
+        //: ------------------------------------
+        //:   Loop forever until user quits
+        //: ------------------------------------
+        while (!g_test_finished)
+        {
+                //NDBG_PRINT("BOOP.\n");
+
+                i = kbhit();
+                if (i != 0)
+                {
+
+                        l_cmd = fgetc(stdin);
+
+                        switch (l_cmd)
+                        {
+
+                        // Display
+                        case 'p':
+                                //a_scanner->display_collection_stats();
+                                break;
+
+                                //Quit
+                        case 'q':
+                                g_test_finished = true;
+                                l_hlo->stop();
+                                l_sent_stop = true;
+                                break;
+
+                                //Toggle pause
+                        case 'P':
+                                //test_pause = 1 - test_pause;
+                                break;
+
+                                // Default
+                        default:
+                                break;
+                        }
+                }
+
+                // TODO add define...
+                usleep(200000);
+                if(!a_thread_args.m_settings.m_quiet && !a_thread_args.m_settings.m_verbose)
+                {
+                        if(l_first_time)
+                        {
+                                l_hlo->display_results_line_desc();
+                                l_first_time = false;
+                        }
+                        l_hlo->display_results_line();
+                }
+
+                if (!l_hlo->is_running())
+                {
+                        g_test_finished = true;
+                }
+
+        }
+
+        // Send stop -if unsent
+        if(!l_sent_stop)
+        {
+                l_hlo->stop();
+                l_sent_stop = true;
+        }
+
+        nonblock(NB_DISABLE);
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: sighandler
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
 void sig_handler(int signo)
 {
-  if (signo == SIGINT)
-  {
-          // Kill program
-          //NDBG_PRINT("SIGINT\n");
-          g_test_finished = true;
-  }
+        if (signo == SIGINT)
+        {
+                // Kill program
+                //NDBG_PRINT("SIGINT\n");
+                g_test_finished = true;
+        }
 }
 
 //: ----------------------------------------------------------------------------
@@ -216,7 +438,8 @@ int main(int argc, char** argv)
 {
 
         // Get hlo instance
-        hlo *l_hlo = hlo::get();
+        hlo *l_hlo = new hlo();
+        l_hlo->set_wildcarding(true);
 
         // -------------------------------------------
         // Setup default headers before the user
@@ -241,6 +464,10 @@ int main(int argc, char** argv)
         int l_max_reqs_per_conn = 1;
         int l_end_fetches = -1;
         bool l_input_flag = false;
+
+        // Set hlo pointers
+        l_settings.m_hlo = l_hlo;
+        g_hlo = l_hlo;
 
         // -------------------------------------------
         // Get args...
@@ -759,13 +986,13 @@ int main(int argc, char** argv)
         // -------------------------------------------
         if(l_http_load_display != -1)
         {
-                l_hlo->display_results_http_load_style(((double)l_end_time_ms)/1000.0, 100,
+                l_hlo->display_results_http_load_style(((double)l_end_time_ms)/1000.0,
                                 (bool)(l_http_load_display&(0x1)),
                                 (bool)((l_http_load_display&(0x2)) >> 1));
         }
         else
         {
-                l_hlo->display_results(((double)l_end_time_ms)/1000.0, 100, l_show_breakdown);
+                l_hlo->display_results(((double)l_end_time_ms)/1000.0, l_show_breakdown);
         }
 
         // -------------------------------------------
@@ -785,132 +1012,3 @@ int main(int argc, char** argv)
 
 }
 
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int kbhit()
-{
-        struct timeval tv;
-        fd_set fds;
-        tv.tv_sec = 0;
-        tv.tv_usec = 0;
-        FD_ZERO(&fds);
-        FD_SET(STDIN_FILENO, &fds);
-        //STDIN_FILENO is 0
-        select(STDIN_FILENO + 1, &fds, NULL, NULL, &tv);
-        return FD_ISSET(STDIN_FILENO, &fds);
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-void nonblock(int state)
-{
-        struct termios ttystate;
-
-        //get the terminal state
-        tcgetattr(STDIN_FILENO, &ttystate);
-
-        if (state == NB_ENABLE)
-        {
-                //turn off canonical mode
-                ttystate.c_lflag &= ~ICANON;
-                //minimum of number input read.
-                ttystate.c_cc[VMIN] = 1;
-        } else if (state == NB_DISABLE)
-        {
-                //turn on canonical mode
-                ttystate.c_lflag |= ICANON;
-        }
-        //set the terminal attributes.
-        tcsetattr(STDIN_FILENO, TCSANOW, &ttystate);
-
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-void command_exec(thread_args_struct_t &a_thread_args)
-{
-        int i = 0;
-        char l_cmd = ' ';
-        bool l_sent_stop = false;
-        hlo *l_hlo = hlo::get();
-        bool l_first_time = true;
-
-        nonblock(NB_ENABLE);
-
-        //: ------------------------------------
-        //:   Loop forever until user quits
-        //: ------------------------------------
-        while (!g_test_finished)
-        {
-                //NDBG_PRINT("BOOP.\n");
-
-                i = kbhit();
-                if (i != 0)
-                {
-
-                        l_cmd = fgetc(stdin);
-
-                        switch (l_cmd)
-                        {
-
-                        // Display
-                        case 'p':
-                                //a_scanner->display_collection_stats();
-                                break;
-
-                                //Quit
-                        case 'q':
-                                g_test_finished = true;
-                                l_hlo->stop();
-                                l_sent_stop = true;
-                                break;
-
-                                //Toggle pause
-                        case 'P':
-                                //test_pause = 1 - test_pause;
-                                break;
-
-                                // Default
-                        default:
-                                break;
-                        }
-                }
-
-                // TODO add define...
-                usleep(200000);
-                if(!a_thread_args.m_settings.m_quiet && !a_thread_args.m_settings.m_verbose)
-                {
-                        if(l_first_time)
-                        {
-                                l_hlo->display_results_line_desc(a_thread_args.m_settings.m_color);
-                                l_first_time = false;
-                        }
-                        l_hlo->display_results_line(a_thread_args.m_settings.m_color);
-                }
-
-                if (!l_hlo->is_running())
-                {
-                        g_test_finished = true;
-                }
-
-        }
-
-        // Send stop -if unsent
-        if(!l_sent_stop)
-        {
-                l_hlo->stop();
-                l_sent_stop = true;
-        }
-
-        nonblock(NB_DISABLE);
-
-}

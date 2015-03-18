@@ -27,23 +27,17 @@
 //: ----------------------------------------------------------------------------
 //: Includes
 //: ----------------------------------------------------------------------------
+#include "ndebug.h"
+#include "reqlet.h"
+
 #include <string>
 #include <list>
 #include <map>
 #include <stdint.h>
 
-#include "ndebug.h"
-#include "reqlet.h"
-
 //: ----------------------------------------------------------------------------
 //: Constants
 //: ----------------------------------------------------------------------------
-// Version
-#define HLO_VERSION_MAJOR 0
-#define HLO_VERSION_MINOR 0
-#define HLO_VERSION_MACRO 1
-#define HLO_VERSION_PATCH "alpha"
-
 #define HLO_DEFAULT_CONN_TIMEOUT_S 5
 
 //: ----------------------------------------------------------------------------
@@ -93,6 +87,8 @@ public:
         // -------------------------------------------------
         // Public methods
         // -------------------------------------------------
+        hlo();
+
         int32_t init();
 
         ~hlo();
@@ -131,26 +127,25 @@ public:
         bool is_running(void);
 
         // Stats
-        void display_results_line_desc(bool a_color_flag);
-        void display_results_line(bool a_color_flag);
-        void display_results_line_playback(bool a_color_flag);
-
-        void display_results_http_load_style(double a_elapsed_time,
-                        uint32_t a_max_parallel,
-                        bool a_show_breakdown_flag = false, bool a_one_line_flag = false);
+        //int32_t add_stat(const std::string &a_tag, const req_stat_t &a_req_stat);
         void display_results(double a_elapsed_time,
-                        uint32_t a_max_parallel,
-                        bool a_show_breakdown_flag = false);
+                             bool a_show_breakdown_flag = false);
+        void display_results_http_load_style(double a_elapsed_time,
+                                             bool a_show_breakdown_flag = false,
+                                             bool a_one_line_flag = false);
+        void display_results_line_desc(void);
+        void display_results_line(void);
 
+        void get_stats(total_stat_agg_t &ao_all_stats, bool a_get_breakdown, tag_stat_map_t &ao_breakdown_stats);
         int32_t get_stats_json(char *l_json_buf, uint32_t l_json_buf_max_len);
+        void set_start_time_ms(uint64_t a_start_time_ms) {m_start_time_ms = a_start_time_ms;}
+
 
         // -------------------------------------------------
         // Class methods
         // -------------------------------------------------
-    // Get the singleton instance
-    static hlo *get(void);
 
-    // -------------------------------------------------
+        // -------------------------------------------------
         // Public members
         // -------------------------------------------------
         t_client_list_t m_t_client_list;
@@ -160,7 +155,6 @@ private:
         // Private methods
         // -------------------------------------------------
         DISALLOW_COPY_AND_ASSIGN(hlo)
-        hlo();
 
         // -------------------------------------------------
         // Private members
@@ -192,11 +186,14 @@ private:
         reqlet_mode_t m_reqlet_mode;
         bool m_wildcarding;
 
+        // Stats
+        uint64_t m_start_time_ms;
+        uint64_t m_last_display_time_ms;
+        total_stat_agg_t m_last_stat;
+
         // -------------------------------------------------
         // Class members
         // -------------------------------------------------
-        // the pointer to the singleton for the instance 
-        static hlo *m_singleton_ptr;
 
 };
 

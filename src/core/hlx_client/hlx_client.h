@@ -58,6 +58,10 @@ typedef ssl_ctx_st SSL_CTX;
 class reqlet;
 typedef std::vector <reqlet *> reqlet_vector_t;
 
+struct total_stat_agg_struct;
+typedef total_stat_agg_struct total_stat_agg_t;
+typedef std::map <std::string, total_stat_agg_t> tag_stat_map_t;
+
 namespace ns_hlx {
 //: ----------------------------------------------------------------------------
 //: Types
@@ -102,6 +106,14 @@ typedef enum {
         PART_BODY = 1 << 4
 } output_part_t;
 
+typedef enum {
+
+        REQUEST_MODE_SEQUENTIAL = 0,
+        REQUEST_MODE_RANDOM,
+        REQUEST_MODE_ROUND_ROBIN
+
+} request_mode_t;
+
 //: ----------------------------------------------------------------------------
 //: hlx_client
 //: ----------------------------------------------------------------------------
@@ -132,6 +144,8 @@ public:
 
         // url
         void set_url(const std::string &a_url);
+        int32_t set_url_file(const std::string &a_url_file);
+        void set_wildcarding(bool a_val);
 
         // Host list
         int set_host_list(host_list_t &a_host_list);
@@ -145,6 +159,12 @@ public:
         void set_num_threads(uint32_t a_num_threads);
         void set_num_parallel(uint32_t a_num_parallel);
         void set_show_summary(bool a_val);
+
+        void set_run_time_s(int32_t a_val);
+        void set_end_fetches(int32_t a_val);
+        void set_max_reqs_per_conn(int32_t a_val);
+        void set_rate(int32_t a_val);
+        void set_request_mode(request_mode_t a_mode);
 
         // Socket options
         void set_sock_opt_no_delay(bool a_val);
@@ -181,6 +201,24 @@ public:
         bool done(void);
         reqlet *try_get_resolved(void);
 
+
+        // ---------------------------------------
+        // Legacy Display/status
+        // ---------------------------------------
+        //int32_t add_stat(const std::string &a_tag, const req_stat_t &a_req_stat);
+        void display_results(double a_elapsed_time,
+                             bool a_show_breakdown_flag = false);
+        void display_results_http_load_style(double a_elapsed_time,
+                                             bool a_show_breakdown_flag = false,
+                                             bool a_one_line_flag = false);
+        void display_results_line_desc(void);
+        void display_results_line(void);
+
+        void get_stats(total_stat_agg_t &ao_all_stats, bool a_get_breakdown, tag_stat_map_t &ao_breakdown_stats);
+        int32_t get_stats_json(char *l_json_buf, uint32_t l_json_buf_max_len);
+        void set_start_time_ms(uint64_t a_start_time_ms) {m_start_time_ms = a_start_time_ms;}
+
+
 private:
 
         // -------------------------------------------------
@@ -211,6 +249,9 @@ private:
 
         // Run Settings
         std::string m_url;
+        std::string m_url_file;
+        bool m_wildcarding;
+
         header_map_t m_header_map;
         bool m_use_ai_cache;
         std::string m_ai_cache;
@@ -219,6 +260,17 @@ private:
         uint32_t m_timeout_s;
         bool m_connect_only;
         bool m_show_summary;
+
+        int32_t m_rate;
+        int32_t m_end_fetches;
+        int64_t m_max_reqs_per_conn;
+        int32_t m_run_time_s;
+        request_mode_t m_request_mode;
+
+        // Stats
+        uint64_t m_start_time_ms;
+        uint64_t m_last_display_time_ms;
+        total_stat_agg_t *m_last_stat;
 
         // Socket options
         uint32_t m_sock_opt_recv_buf_size;
