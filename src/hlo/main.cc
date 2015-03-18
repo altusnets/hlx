@@ -24,8 +24,9 @@
 //: ----------------------------------------------------------------------------
 //: Includes
 //: ----------------------------------------------------------------------------
-#include "hlo.h"
+#include "hlx_client.h"
 #include "util.h"
+#include "ndebug.h"
 
 #include <string.h>
 
@@ -76,7 +77,6 @@
 //: ----------------------------------------------------------------------------
 //: Types
 //: ----------------------------------------------------------------------------
-typedef std::list <t_client *> t_client_list_t;
 
 //: ----------------------------------------------------------------------------
 //: Settings
@@ -86,7 +86,7 @@ typedef struct settings_struct
         bool m_verbose;
         bool m_color;
         bool m_quiet;
-        hlo *m_hlo;
+        ns_hlx::hlx_client *m_hlx_client;
 
         // ---------------------------------
         // Defaults...
@@ -95,32 +95,17 @@ typedef struct settings_struct
                 m_verbose(false),
                 m_color(false),
                 m_quiet(false),
-                m_hlo(NULL)
+                m_hlx_client(NULL)
         {}
 
 } settings_struct_t;
-
-// ---------------------------------------------------------
-// Structure of arguments to pass to client thread
-// ---------------------------------------------------------
-typedef struct thread_args_struct
-{
-                t_client_list_t m_t_client_list;
-                settings_struct m_settings;
-
-        thread_args_struct() :
-                m_t_client_list(),
-                m_settings()
-        {};
-
-} thread_args_struct_t;
 
 //: ----------------------------------------------------------------------------
 //: Globals
 //: ----------------------------------------------------------------------------
 struct MHD_Daemon *g_daemon;
 static char g_char_buf[RESP_BUFFER_SIZE];
-static hlo *g_hlo = NULL;
+static ns_hlx::hlx_client *g_hlx_client = NULL;
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -138,7 +123,7 @@ answer_to_connection (void *cls,
                 void **con_cls)
 {
 
-        g_hlo->get_stats_json(g_char_buf, RESP_BUFFER_SIZE);
+        g_hlx_client->get_stats_json(g_char_buf, RESP_BUFFER_SIZE);
 
         struct MHD_Response *response;
         int ret;
@@ -196,14 +181,32 @@ int32_t stop_microhttpd(void)
         return 0;
 }
 
+
+//: ----------------------------------------------------------------------------
+//: \details: sighandler
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+bool g_test_finished = false;
+bool g_cancelled = false;
+settings_struct_t *g_settings = NULL;
+void sig_handler(int signo)
+{
+        if (signo == SIGINT)
+        {
+                // Kill program
+                g_test_finished = true;
+                g_cancelled = true;
+                g_settings->m_hlx_client->stop();
+        }
+}
+
 //: ----------------------------------------------------------------------------
 //: Command
 //: TODO Refactor
 //: ----------------------------------------------------------------------------
 #define NB_ENABLE  1
 #define NB_DISABLE 0
-
-bool g_test_finished = false;
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -256,12 +259,12 @@ void nonblock(int state)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void command_exec(thread_args_struct_t &a_thread_args)
+void command_exec(settings_struct_t &a_settings)
 {
         int i = 0;
         char l_cmd = ' ';
         bool l_sent_stop = false;
-        hlo *l_hlo = a_thread_args.m_settings.m_hlo;
+        ns_hlx::hlx_client *l_hlx_client = a_settings.m_hlx_client;
         bool l_first_time = true;
 
         nonblock(NB_ENABLE);
@@ -290,7 +293,7 @@ void command_exec(thread_args_struct_t &a_thread_args)
                                 //Quit
                         case 'q':
                                 g_test_finished = true;
-                                l_hlo->stop();
+                                l_hlx_client->stop();
                                 l_sent_stop = true;
                                 break;
 
@@ -307,17 +310,17 @@ void command_exec(thread_args_struct_t &a_thread_args)
 
                 // TODO add define...
                 usleep(200000);
-                if(!a_thread_args.m_settings.m_quiet && !a_thread_args.m_settings.m_verbose)
+                if(!a_settings.m_quiet && !a_settings.m_verbose)
                 {
                         if(l_first_time)
                         {
-                                l_hlo->display_results_line_desc();
+                                l_hlx_client->display_results_line_desc();
                                 l_first_time = false;
                         }
-                        l_hlo->display_results_line();
+                        l_hlx_client->display_results_line();
                 }
 
-                if (!l_hlo->is_running())
+                if (!l_hlx_client->is_running())
                 {
                         g_test_finished = true;
                 }
@@ -327,27 +330,12 @@ void command_exec(thread_args_struct_t &a_thread_args)
         // Send stop -if unsent
         if(!l_sent_stop)
         {
-                l_hlo->stop();
+                l_hlx_client->stop();
                 l_sent_stop = true;
         }
 
         nonblock(NB_DISABLE);
 
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: sighandler
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-void sig_handler(int signo)
-{
-        if (signo == SIGINT)
-        {
-                // Kill program
-                //NDBG_PRINT("SIGINT\n");
-                g_test_finished = true;
-        }
 }
 
 //: ----------------------------------------------------------------------------
@@ -438,23 +426,29 @@ int main(int argc, char** argv)
 {
 
         // Get hlo instance
-        hlo *l_hlo = new hlo();
-        l_hlo->set_wildcarding(true);
+        settings_struct_t l_settings;
+        ns_hlx::hlx_client *l_hlx_client = new ns_hlx::hlx_client();
+        l_settings.m_hlx_client = l_hlx_client;
+        g_hlx_client = l_hlx_client;
+
+        // For sighandler
+        g_settings = &l_settings;
+
+        // Turn on wildcarding by default
+        l_hlx_client->set_wildcarding(true);
 
         // -------------------------------------------
         // Setup default headers before the user
         // -------------------------------------------
-        l_hlo->set_header("User-Agent", "hlo Server Load Tester");
+        l_hlx_client->set_header("User-Agent", "hlo Server Load Tester");
         //l_hlo->set_header("User-Agent", "ONGA_BONGA (╯°□°）╯︵ ┻━┻)");
         //l_hlo->set_header("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/33.0.1750.117 Safari/537.36");
         //l_hlo->set_header("x-select-backend", "self");
-        l_hlo->set_header("Accept", "*/*");
+        l_hlx_client->set_header("Accept", "*/*");
         //l_hlo->set_header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
         //l_hlo->set_header("Accept-Encoding", "gzip,deflate");
         //l_hlo->set_header("Connection", "keep-alive");
 
-        settings_struct_t l_settings;
-        thread_args_struct_t l_thread_args;
         int32_t l_http_load_display = -1;
         int32_t l_http_data_port = -1;
         bool l_show_breakdown = false;
@@ -464,10 +458,6 @@ int main(int argc, char** argv)
         int l_max_reqs_per_conn = 1;
         int l_end_fetches = -1;
         bool l_input_flag = false;
-
-        // Set hlo pointers
-        l_settings.m_hlo = l_hlo;
-        g_hlo = l_hlo;
 
         // -------------------------------------------
         // Get args...
@@ -584,7 +574,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 case 'w':
                 {
-                        l_hlo->set_wildcarding(false);
+                        l_hlx_client->set_wildcarding(false);
                         break;
                 }
 
@@ -609,7 +599,7 @@ int main(int argc, char** argv)
                                 l_cipher_str = "DES-CBC3-SHA";
                         else if (strcasecmp(l_cipher_str.c_str(), "paranoid") == 0)
                                 l_cipher_str = "AES256-SHA";
-                        l_hlo->set_cipher_list(l_cipher_str);
+                        l_hlx_client->set_ssl_cipher_list(l_cipher_str);
                         break;
                 }
 
@@ -626,7 +616,7 @@ int main(int argc, char** argv)
                                 printf("parallel must be at least 1\n");
                                 print_usage(stdout, -1);
                         }
-                        l_hlo->set_start_parallel(l_start_parallel);
+                        l_hlx_client->set_num_parallel(l_start_parallel);
                         break;
                 }
 
@@ -643,7 +633,7 @@ int main(int argc, char** argv)
                                 printf("fetches must be at least 1\n");
                                 print_usage(stdout, -1);
                         }
-                        l_hlo->set_end_fetches(l_end_fetches);
+                        l_hlx_client->set_end_fetches(l_end_fetches);
 
                         break;
                 }
@@ -661,7 +651,7 @@ int main(int argc, char** argv)
                                 print_usage(stdout, -1);
                         }
 
-                        l_hlo->set_max_reqs_per_conn(l_max_reqs_per_conn);
+                        l_hlx_client->set_max_reqs_per_conn(l_max_reqs_per_conn);
                         break;
                 }
 
@@ -670,7 +660,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 case 'k':
                 {
-                        l_hlo->set_max_reqs_per_conn(-1);
+                        l_hlx_client->set_max_reqs_per_conn(-1);
                         break;
                 }
 
@@ -687,7 +677,7 @@ int main(int argc, char** argv)
                                 print_usage(stdout, -1);
                         }
 
-                        l_hlo->set_num_threads(l_max_threads);
+                        l_hlx_client->set_num_threads(l_max_threads);
                         break;
                 }
                 // ---------------------------------------
@@ -696,19 +686,12 @@ int main(int argc, char** argv)
                 case 'H':
                 {
                         int32_t l_status;
-                        std::string l_header_key;
-                        std::string l_header_val;
-                        l_status = break_header_string(l_argument, l_header_key, l_header_val);
-                        if(l_status != 0)
+                        l_status = l_hlx_client->set_header(l_argument);
+                        if(l_status != HLX_CLIENT_STATUS_OK)
                         {
                                 printf("Error header string[%s] is malformed\n", l_argument.c_str());
                                 print_usage(stdout, -1);
                         }
-
-                        // Add to hlo header map
-                        l_hlo->set_header(l_header_key, l_header_val);
-                        // TODO Check status???
-
                         break;
                 }
                 // ---------------------------------------
@@ -722,7 +705,7 @@ int main(int argc, char** argv)
                                 printf("Error: rate must be at least 1\n");
                                 print_usage(stdout, -1);
                         }
-                        l_hlo->set_rate(l_rate);
+                        l_hlx_client->set_rate(l_rate);
 
                         break;
                 }
@@ -731,26 +714,26 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 case 'M':
                 {
-                        reqlet_mode_t l_mode;
+                        ns_hlx::request_mode_t l_mode;
                         std::string l_mode_arg = optarg;
                         if(l_mode_arg == "roundrobin")
                         {
-                                l_mode = REQLET_MODE_ROUND_ROBIN;
+                                l_mode = ns_hlx::REQUEST_MODE_ROUND_ROBIN;
                         }
                         else if(l_mode_arg == "sequential")
                         {
-                                l_mode = REQLET_MODE_SEQUENTIAL;
+                                l_mode = ns_hlx::REQUEST_MODE_SEQUENTIAL;
                         }
                         else if(l_mode_arg == "random")
                         {
-                                l_mode = REQLET_MODE_RANDOM;
+                                l_mode = ns_hlx::REQUEST_MODE_RANDOM;
                         }
                         else
                         {
                                 printf("Error: Mode must be [roundrobin|sequential|random]\n");
                                 print_usage(stdout, -1);
                         }
-                        l_hlo->set_reqlet_mode(l_mode);
+                        l_hlx_client->set_request_mode(l_mode);
 
                         break;
                 }
@@ -765,7 +748,7 @@ int main(int argc, char** argv)
                                 printf("Error: seconds must be at least 1\n");
                                 print_usage(stdout, -1);
                         }
-                        l_hlo->set_run_time_s(l_run_time_s);
+                        l_hlx_client->set_run_time_s(l_run_time_s);
 
                         break;
                 }
@@ -777,7 +760,7 @@ int main(int argc, char** argv)
                 {
                         int l_sock_opt_recv_buf_size = atoi(optarg);
                         // TODO Check value...
-                        l_hlo->set_sock_opt_recv_buf_size(l_sock_opt_recv_buf_size);
+                        l_hlx_client->set_sock_opt_recv_buf_size(l_sock_opt_recv_buf_size);
 
                         break;
                 }
@@ -789,7 +772,7 @@ int main(int argc, char** argv)
                 {
                         int l_sock_opt_send_buf_size = atoi(optarg);
                         // TODO Check value...
-                        l_hlo->set_sock_opt_send_buf_size(l_sock_opt_send_buf_size);
+                        l_hlx_client->set_sock_opt_send_buf_size(l_sock_opt_send_buf_size);
                         break;
                 }
 
@@ -798,7 +781,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 case 'D':
                 {
-                        l_hlo->set_sock_opt_no_delay(true);
+                        l_hlx_client->set_sock_opt_no_delay(true);
                         break;
                 }
 
@@ -816,7 +799,7 @@ int main(int argc, char** argv)
                                 printf("timeout must be at > 0\n");
                                 print_usage(stdout, -1);
                         }
-                        l_hlo->set_timeout_s(l_timeout);
+                        l_hlx_client->set_timeout_s(l_timeout);
 
                         break;
                 }
@@ -826,7 +809,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 case 'x':
                         l_settings.m_verbose = true;
-                        l_hlo->set_verbose(true);
+                        l_hlx_client->set_verbose(true);
                         break;
 
                 // ---------------------------------------
@@ -834,7 +817,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 case 'c':
                         l_settings.m_color = true;
-                        l_hlo->set_color(true);
+                        l_hlx_client->set_color(true);
                         break;
 
                 // ---------------------------------------
@@ -842,7 +825,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 case 'q':
                         l_settings.m_quiet = true;
-                        l_hlo->set_quiet(true);
+                        l_hlx_client->set_quiet(true);
                         break;
 
 
@@ -923,10 +906,10 @@ int main(int argc, char** argv)
         // if one...
         // -------------------------------------------
         if(l_url_file_str.length()) {
-                l_hlo->set_url_file(l_url_file_str);
+                l_hlx_client->set_url_file(l_url_file_str);
                 // TODO Check status
         } else if(l_url.length()) {
-                l_hlo->set_url(l_url);
+                l_hlx_client->set_url(l_url);
         } else {
                 fprintf(stdout, "Error: No specified URLs on cmd line or in file with -u.\n");
                 print_usage(stdout, -1);
@@ -943,7 +926,7 @@ int main(int argc, char** argv)
         fprintf(stdout, "Running %d parallel connections with: %d reqs/conn, %d threads\n", l_start_parallel, l_max_reqs_per_conn, l_max_threads);
 
         int32_t l_run_status = 0;
-        l_run_status = l_hlo->run();
+        l_run_status = l_hlx_client->run();
         if(0 != l_run_status)
         {
                 printf("Error: performing hlo::run");
@@ -961,9 +944,7 @@ int main(int argc, char** argv)
         // -------------------------------------------
         // Run command exec
         // -------------------------------------------
-        // Copy in settings
-        l_thread_args.m_settings = l_settings;
-        command_exec(l_thread_args);
+        command_exec(l_settings);
 
         if(l_settings.m_verbose)
         {
@@ -971,7 +952,7 @@ int main(int argc, char** argv)
         }
 
         // Wait for completion
-        l_hlo->wait_till_stopped();
+        l_hlx_client->wait_till_stopped();
 
 #ifdef ENABLE_PROFILER
         if (!l_gprof_file.empty())
@@ -986,13 +967,13 @@ int main(int argc, char** argv)
         // -------------------------------------------
         if(l_http_load_display != -1)
         {
-                l_hlo->display_results_http_load_style(((double)l_end_time_ms)/1000.0,
+                l_hlx_client->display_results_http_load_style(((double)l_end_time_ms)/1000.0,
                                 (bool)(l_http_load_display&(0x1)),
                                 (bool)((l_http_load_display&(0x2)) >> 1));
         }
         else
         {
-                l_hlo->display_results(((double)l_end_time_ms)/1000.0, l_show_breakdown);
+                l_hlx_client->display_results(((double)l_end_time_ms)/1000.0, l_show_breakdown);
         }
 
         // -------------------------------------------

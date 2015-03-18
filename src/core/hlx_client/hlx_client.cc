@@ -128,6 +128,10 @@ typedef struct settings_struct
         int32_t m_num_parallel;
         uint32_t m_num_threads;
         uint32_t m_timeout_s;
+        int32_t m_rate;
+        request_mode_t m_request_mode;
+        int32_t m_end_fetches;
+        int32_t m_run_time_s;
         bool m_connect_only;
 
         // tcp options
@@ -162,6 +166,10 @@ typedef struct settings_struct
                 m_num_parallel(64),
                 m_num_threads(8),
                 m_timeout_s(10),
+                m_rate(-1),
+                m_request_mode(REQUEST_MODE_ROUND_ROBIN),
+                m_end_fetches(-1),
+                m_run_time_s(-1),
                 m_connect_only(false),
                 m_sock_opt_recv_buf_size(0),
                 m_sock_opt_send_buf_size(0),
@@ -204,6 +212,9 @@ public:
         void set_ssl_ctx(SSL_CTX * a_ssl_ctx) { m_settings.m_ssl_ctx = a_ssl_ctx;};
         uint32_t get_timeout_s(void) { return m_settings.m_timeout_s;};
         void get_stats_copy(tag_stat_map_t &ao_tag_stat_map);
+        void set_end_fetches(int32_t a_num_fetches) { m_num_fetches = a_num_fetches;}
+
+        bool is_done(void) const {return (m_num_fetched == m_num_fetches);}
 
         // -------------------------------------------------
         // Public members
@@ -254,6 +265,9 @@ private:
         int64_t m_num_fetched;
         int64_t m_num_pending;
 
+        int32_t m_run_time_s;
+        int32_t m_start_time_s;
+
         //uint64_t m_unresolved_count;
 
         // Get evr_loop
@@ -282,6 +296,8 @@ t_client::t_client(const settings_struct_t &a_settings):
         m_num_fetches(-1),
         m_num_fetched(0),
         m_num_pending(0),
+        m_run_time_s(-1),
+        m_start_time_s(0),
         m_evr_loop(NULL)
 {
         for(int32_t i_conn = 0; i_conn < a_settings.m_num_parallel; ++i_conn)
@@ -587,6 +603,28 @@ void *t_client::t_run(void *a_nothing)
         // Set thread local
         g_t_client = this;
 
+#if 0
+        // Add the urls
+        if(!m_url.empty())
+        {
+                l_status = add_url(m_url);
+                if(l_status != STATUS_OK)
+                {
+                        m_stopped = true;
+                        return NULL;
+                }
+        }
+        if(!m_url_file.empty())
+        {
+                l_status = add_url_file(m_url_file);
+                if(l_status != STATUS_OK)
+                {
+                        m_stopped = true;
+                        return NULL;
+                }
+        }
+#endif
+
         // Create loop
         m_evr_loop = new evr_loop(
                         evr_loop_file_readable_cb,
@@ -598,12 +636,17 @@ void *t_client::t_run(void *a_nothing)
         // Get hlx ptr
         hlx_client *l_hlx_client = m_settings.m_hlx_client;
 
+        // Set start time
+        m_start_time_s = get_time_s();
+
         // -------------------------------------------
         // Main loop.
         // -------------------------------------------
         //NDBG_PRINT("starting main loop\n");
         while(!m_stopped &&
-                        !l_hlx_client->done())
+              !l_hlx_client->done() &&
+              !is_done() &&
+              ((m_run_time_s == -1) || (m_run_time_s > (int32_t)(get_time_s() - m_start_time_s))))
         {
 
                 // -------------------------------------------
@@ -988,6 +1031,13 @@ int hlx_client::run(void)
                 }
         }
 
+        // Caculate num parallel per thread
+        uint32_t l_num_parallel_conn_per_thread = m_num_parallel / m_num_threads;
+        if(l_num_parallel_conn_per_thread < 1) l_num_parallel_conn_per_thread = 1;
+
+        uint32_t l_num_fetches_per_thread = m_end_fetches / m_num_threads;
+        uint32_t l_remainder_fetches = m_end_fetches % m_num_threads;
+
         // -------------------------------------------
         // Bury the config into a settings struct
         // -------------------------------------------
@@ -999,9 +1049,12 @@ int hlx_client::run(void)
         l_settings.m_url = m_url;
         l_settings.m_header_map = m_header_map;
         l_settings.m_evr_loop_type = (evr_loop_type_t)m_evr_loop_type;
-        l_settings.m_num_parallel = m_num_parallel;
+        l_settings.m_num_parallel = l_num_parallel_conn_per_thread;
         l_settings.m_num_threads = m_num_threads;
         l_settings.m_timeout_s = m_timeout_s;
+        l_settings.m_rate = m_rate;
+        l_settings.m_request_mode = m_request_mode;
+        l_settings.m_end_fetches = m_end_fetches;
         l_settings.m_connect_only = m_connect_only;
         l_settings.m_sock_opt_recv_buf_size = m_sock_opt_recv_buf_size;
         l_settings.m_sock_opt_send_buf_size = m_sock_opt_send_buf_size;
@@ -1036,8 +1089,15 @@ int hlx_client::run(void)
                         l_t_client->set_header(i_header->first, i_header->second);
                 }
 
+                if (i_client_idx == (m_num_threads - 1))
+                        l_num_fetches_per_thread += l_remainder_fetches;
+
+                l_t_client->set_end_fetches(l_num_fetches_per_thread);
+
                 m_t_client_list.push_back(l_t_client);
         }
+
+        set_start_time_ms(get_time_ms());
 
         // -------------------------------------------
         // Run...
@@ -1375,6 +1435,11 @@ void hlx_client::set_end_fetches(int32_t a_val)
 void hlx_client::set_max_reqs_per_conn(int32_t a_val)
 {
         m_max_reqs_per_conn = a_val;
+        if((m_max_reqs_per_conn > 1) ||
+           (m_max_reqs_per_conn < 0))
+        {
+                set_header("Connection", "keep-alive");
+        }
 }
 
 //: ----------------------------------------------------------------------------

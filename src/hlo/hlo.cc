@@ -1652,9 +1652,6 @@ int32_t hlo::run(void)
 		}
 	}
 
-
-        set_start_time_ms(get_time_ms());
-
 	// Caculate num parallel per thread
 	uint32_t l_num_parallel_conn_per_thread = m_start_parallel / m_num_threads;
 	if(l_num_parallel_conn_per_thread < 1) l_num_parallel_conn_per_thread = 1;

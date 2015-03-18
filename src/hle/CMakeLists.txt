@@ -29,12 +29,7 @@ LIST(APPEND INST_HDRS ${HDRS})
 # include paths
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}
 #${CMAKE_CURRENT_BINARY_DIR}
-    ../core/support/
-    ../core/evr/
     ../core/ndebug
-    ../core/http_parser
-    ../core/tinymt
-    ../core/cityhash
     ../core/hlx_client
 )
 
@@ -80,8 +75,8 @@ SET(HDRS
 add_executable(hle_cmd ${HDRS} ${SRCS})
 SET_TARGET_PROPERTIES(hle_cmd PROPERTIES OUTPUT_NAME "hle")
 target_link_libraries(hle_cmd
-pthread
 ${CMAKE_BINARY_DIR}/src/core/libhlxcore.a
+pthread
 rt
 ssl
 crypto

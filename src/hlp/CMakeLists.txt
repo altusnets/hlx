@@ -86,10 +86,8 @@ SET(HDRS
 add_executable(hlp_cmd ${HDRS} ${SRCS})
 SET_TARGET_PROPERTIES(hlp_cmd PROPERTIES OUTPUT_NAME "hlp")
 target_link_libraries(hlp_cmd
-pthread
-microhttpd
-rt
 ${CMAKE_BINARY_DIR}/src/core/libhlxcore.a
+pthread
 rt
 crypto
 ssl

@@ -389,7 +389,6 @@ void print_usage(FILE* a_stream, int a_exit_code)
 //: ----------------------------------------------------------------------------
 int main(int argc, char** argv)
 {
-
         settings_struct_t l_settings;
         ns_hlx::hlx_client *l_hlx_client = new ns_hlx::hlx_client();
         l_settings.m_hlx_client = l_hlx_client;
