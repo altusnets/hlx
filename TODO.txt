@@ -1,0 +1,8 @@
+TODO:
+1. Fix counting.
+2. Split t_client -make thread safe -each t_client to own their own reqlets.
+3. Add 3rd-party json parser -boot jsoncpp
+4. Make perf-tools/tcmalloc optional
+5. Make hlx_server with evr and boot microhttpd
+6. Remove leveldb and use json file for address cache.
+7. Merge hlp with hlx_client.
