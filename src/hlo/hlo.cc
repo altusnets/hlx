@@ -404,7 +404,7 @@ void t_client::stop(void)
 //: ----------------------------------------------------------------------------
 void *t_client::evr_loop_file_writeable_cb(void *a_data)
 {
-
+        //NDBG_PRINT("%sWRITEABLE%s %p\n", ANSI_COLOR_FG_BLUE, ANSI_COLOR_OFF, l_nconn);
         if(!a_data)
         {
                 return NULL;
@@ -413,6 +413,9 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
         nconn* l_nconn = static_cast<nconn*>(a_data);
         reqlet *l_reqlet = static_cast<reqlet *>(l_nconn->get_data1());
         t_client *l_t_client = g_t_client;
+
+        // Cancel last timer
+        l_t_client->m_evr_loop->cancel_timer(&(l_nconn->m_timer_obj));
 
         if (false == l_t_client->has_available_fetches())
                 return NULL;
@@ -443,10 +446,11 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
 //: ----------------------------------------------------------------------------
 void *t_client::evr_loop_file_readable_cb(void *a_data)
 {
-        //NDBG_PRINT("%sREADABLE%s\n", ANSI_COLOR_BG_GREEN, ANSI_COLOR_OFF);
+        //NDBG_PRINT("%sREADABLE%s %p\n", ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF, l_nconn);
 
         if(!a_data)
         {
+                //NDBG_PRINT("a_data == NULL\n");
                 return NULL;
         }
 
@@ -454,20 +458,15 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
         reqlet *l_reqlet = static_cast<reqlet *>(l_nconn->get_data1());
         t_client *l_t_client = g_t_client;
 
-        //NDBG_PRINT("%sREADABLE%s %p\n", ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF, l_nconn);
-
         // Cancel last timer
         l_t_client->m_evr_loop->cancel_timer(&(l_nconn->m_timer_obj));
 
         int32_t l_status = STATUS_OK;
         l_status = l_nconn->run_state_machine(l_t_client->m_evr_loop, l_reqlet->m_host_info);
-        if(STATUS_ERROR == l_status)
+        if((STATUS_ERROR == l_status) &&
+           l_nconn->m_verbose)
         {
                 NDBG_PRINT("Error: performing run_state_machine\n");
-                // TODO FIX!!!
-                //T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 500, "Error performing connect_cb");
-                l_t_client->cleanup_connection(l_nconn);
-                return NULL;
         }
 
         if(l_status >= 0)
@@ -547,9 +546,9 @@ void *t_client::evr_loop_file_error_cb(void *a_data)
 //: ----------------------------------------------------------------------------
 void *t_client::evr_loop_file_timeout_cb(void *a_data)
 {
-
         if(!a_data)
         {
+                //NDBG_PRINT("a_data == NULL\n");
                 return NULL;
         }
 

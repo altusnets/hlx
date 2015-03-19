@@ -215,9 +215,16 @@ public:
         uint32_t get_timeout_s(void) { return m_settings.m_timeout_s;};
         void get_stats_copy(tag_stat_map_t &ao_tag_stat_map);
         void set_end_fetches(int32_t a_num_fetches) { m_num_fetches = a_num_fetches;}
-
         bool is_done(void) const {return (m_num_fetched == m_num_fetches);}
-
+        bool has_available_fetches(void) const
+        {
+                return ((m_num_fetches == -1) || (m_num_pending < m_num_fetches));
+        }
+        bool reqlet_give_and_can_reuse_conn(reqlet *a_reqlet)
+        {
+                limit_rate();
+                return has_available_fetches();
+        }
         // -------------------------------------------------
         // Public members
         // -------------------------------------------------
@@ -581,9 +588,9 @@ reqlet *t_client::try_get_resolved(void)
 //: ----------------------------------------------------------------------------
 void *t_client::evr_loop_file_writeable_cb(void *a_data)
 {
+        //NDBG_PRINT("%sWRITEABLE%s %p\n", ANSI_COLOR_FG_BLUE, ANSI_COLOR_OFF, l_nconn);
         if(!a_data)
         {
-                //NDBG_PRINT("a_data == NULL\n");
                 return NULL;
         }
 
@@ -593,6 +600,9 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
 
         // Cancel last timer
         l_t_client->m_evr_loop->cancel_timer(&(l_nconn->m_timer_obj));
+
+        if (false == l_t_client->has_available_fetches())
+                return NULL;
 
         int32_t l_status = STATUS_OK;
         l_status = l_nconn->run_state_machine(l_t_client->m_evr_loop, l_reqlet->m_host_info);
@@ -634,6 +644,8 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
 //: ----------------------------------------------------------------------------
 void *t_client::evr_loop_file_readable_cb(void *a_data)
 {
+        //NDBG_PRINT("%sREADABLE%s %p\n", ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF, l_nconn);
+
         if(!a_data)
         {
                 //NDBG_PRINT("a_data == NULL\n");
@@ -649,14 +661,10 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
 
         int32_t l_status = STATUS_OK;
         l_status = l_nconn->run_state_machine(l_t_client->m_evr_loop, l_reqlet->m_host_info);
-        if(STATUS_ERROR == l_status)
+        if((STATUS_ERROR == l_status) &&
+           l_nconn->m_verbose)
         {
-                if(l_nconn->m_verbose)
-                {
-                        NDBG_PRINT("Error: performing run_state_machine\n");
-                }
-                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 901, l_nconn->m_last_error.c_str());
-                return NULL;
+                NDBG_PRINT("Error: performing run_state_machine\n");
         }
 
         if(l_status >= 0)
@@ -668,19 +676,55 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
         if((l_nconn->is_done()) ||
            (l_status == STATUS_ERROR))
         {
+                // Add stats
+                add_stat_to_agg(l_reqlet->m_stat_agg, l_nconn->get_stats());
+                l_nconn->reset_stats();
+
+                l_reqlet->m_stat_agg.m_num_conn_completed++;
+                l_t_client->m_num_fetched++;
+
+                // Bump stats
                 if(l_status == STATUS_ERROR)
                 {
+                        ++(l_reqlet->m_stat_agg.m_num_errors);
                         T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 901, l_nconn->m_last_error.c_str());
                 }
                 else
                 {
-                        if(l_t_client->m_settings.m_connect_only)
+                        // Give back reqlet
+                        bool l_can_reuse = false;
+                        l_can_reuse = (l_nconn->can_reuse() && l_t_client->reqlet_give_and_can_reuse_conn(l_reqlet));
+
+                        //NDBG_PRINT("CONN %sREUSE%s: %d -- l_nconn->can_reuse(): %d  --l_t_client->reqlet_give_and_can_reuse_conn(l_reqlet): %d\n",
+                        //              ANSI_COLOR_BG_RED, ANSI_COLOR_OFF,
+                        //              l_can_reuse,
+                        //              l_nconn->can_reuse(),
+                        //              l_t_client->reqlet_give_and_can_reuse_conn(l_reqlet)
+                        //              );
+
+                        if(l_can_reuse)
                         {
-                                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 200, "Connected Successfully");
+                                // Send request again...
+                                l_t_client->create_request(*l_nconn, *l_reqlet);
+                                l_nconn->send_request(true);
+                                l_t_client->m_num_pending++;
                         }
+                        // You complete me...
                         else
                         {
-                                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 0, "");
+                                //NDBG_PRINT("DONE: l_reqlet: %sHOST%s: %d / %d\n",
+                                //              ANSI_COLOR_BG_RED, ANSI_COLOR_OFF,
+                                //              l_can_reuse,
+                                //              l_nconn->can_reuse());
+
+                                if(l_t_client->m_settings.m_connect_only)
+                                {
+                                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 200, "Connected Successfully");
+                                }
+                                else
+                                {
+                                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 0, "");
+                                }
                         }
                 }
                 return NULL;
@@ -736,7 +780,9 @@ void *t_client::evr_loop_file_timeout_cb(void *a_data)
         //                l_rconn->m_timer_obj);
 
         // Add stats
-        //add_stat_to_agg(l_reqlet->m_stat_agg, l_nconn->get_stats());
+        add_stat_to_agg(l_reqlet->m_stat_agg, l_nconn->get_stats());
+        l_nconn->reset_stats();
+
         if(l_t_client->m_settings.m_verbose)
         {
                 NDBG_PRINT("%sTIMING OUT CONN%s: i_conn: %lu HOST: %s THIS: %p\n",
@@ -745,6 +791,11 @@ void *t_client::evr_loop_file_timeout_cb(void *a_data)
                                 l_reqlet->m_url.m_host.c_str(),
                                 l_t_client);
         }
+
+        // Stats
+        l_t_client->m_num_fetched++;
+        l_reqlet->m_stat_agg.m_num_conn_completed++;
+        ++(l_reqlet->m_stat_agg.m_num_idle_killed);
 
         // Cleanup
         T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 902, "Connection timed out");
@@ -2397,38 +2448,32 @@ void hlx_client::get_stats(total_stat_agg_t &ao_all_stats,
         // -------------------------------------------
         // Aggregate
         // -------------------------------------------
-        for(t_client_list_t::iterator i_c = m_t_client_list.begin();
-                        i_c != m_t_client_list.end();
-                        ++i_c)
+        tag_stat_map_t l_copy;
+        // TODO Need to make this threadsafe -spinlock perhaps...
+        for(reqlet_vector_t::iterator i_reqlet = m_reqlet_vector.begin(); i_reqlet != m_reqlet_vector.end(); ++i_reqlet)
         {
-
-                // Grab a copy of the stats
-
-                // TODO Can we pull this out of the reqlet repo instead???
-                tag_stat_map_t l_copy;
-                (*i_c)->get_stats_copy(l_copy);
-                for(tag_stat_map_t::iterator i_reqlet = l_copy.begin(); i_reqlet != l_copy.end(); ++i_reqlet)
-                {
-                        if(a_get_breakdown)
-                        {
-                                std::string l_tag = i_reqlet->first;
-                                tag_stat_map_t::iterator i_stat;
-                                if((i_stat = ao_breakdown_stats.find(l_tag)) == ao_breakdown_stats.end())
-                                {
-                                        ao_breakdown_stats[l_tag] = i_reqlet->second;
-                                }
-                                else
-                                {
-                                        // Add to existing
-                                        add_to_total_stat_agg(i_stat->second, i_reqlet->second);
-                                }
-                        }
-
-                        // Add to total
-                        add_to_total_stat_agg(ao_all_stats, i_reqlet->second);
-                }
+                l_copy[(*i_reqlet)->get_label()] = (*i_reqlet)->m_stat_agg;
         }
+        for(tag_stat_map_t::iterator i_reqlet = l_copy.begin(); i_reqlet != l_copy.end(); ++i_reqlet)
+        {
+                if(a_get_breakdown)
+                {
+                        std::string l_tag = i_reqlet->first;
+                        tag_stat_map_t::iterator i_stat;
+                        if((i_stat = ao_breakdown_stats.find(l_tag)) == ao_breakdown_stats.end())
+                        {
+                                ao_breakdown_stats[l_tag] = i_reqlet->second;
+                        }
+                        else
+                        {
+                                // Add to existing
+                                add_to_total_stat_agg(i_stat->second, i_reqlet->second);
+                        }
+                }
 
+                // Add to total
+                add_to_total_stat_agg(ao_all_stats, i_reqlet->second);
+        }
 }
 
 //: ----------------------------------------------------------------------------
