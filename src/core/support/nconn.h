@@ -126,7 +126,7 @@ public:
                 m_timer_obj(NULL),
                 m_last_error(""),
                 m_id(0),
-                m_max_reqs_per_conn(a_max_reqs_per_conn),
+                m_num_reqs_per_conn(a_max_reqs_per_conn),
                 m_num_reqs(0),
                 m_connect_only(a_connect_only)
         {
@@ -150,9 +150,9 @@ public:
 
         bool can_reuse(void)
         {
-                //NDBG_PRINT("CONN ka %d / max %ld / %ld \n", m_server_response_supports_keep_alives, m_num_reqs, m_max_reqs_per_conn);
+                //NDBG_PRINT("CONN ka %d / num %ld / %ld \n", m_server_response_supports_keep_alives, m_num_reqs, m_num_reqs_per_conn);
                 if(m_server_response_supports_keep_alives &&
-                   ((m_max_reqs_per_conn == -1) || (m_num_reqs < m_max_reqs_per_conn)))
+                   ((m_num_reqs_per_conn == -1) || (m_num_reqs < m_num_reqs_per_conn)))
                 {
                         return true;
                 }
@@ -214,7 +214,7 @@ protected:
         // -------------------------------------------------
         // Protected members
         // -------------------------------------------------
-        int64_t m_max_reqs_per_conn;
+        int64_t m_num_reqs_per_conn;
         int64_t m_num_reqs;
         bool m_connect_only;
 };

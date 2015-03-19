@@ -369,7 +369,7 @@ void print_usage(FILE* a_stream, int a_exit_code)
         fprintf(a_stream, "Usage: hlo [http[s]://]hostname[:port]/path [options]\n");
         fprintf(a_stream, "Options are:\n");
         fprintf(a_stream, "  -h, --help         Display this help and exit.\n");
-        fprintf(a_stream, "  -v, --version      Display the version number and exit.\n");
+        fprintf(a_stream, "  -r, --version      Display the version number and exit.\n");
 
         fprintf(a_stream, "  \n");
         fprintf(a_stream, "Input Options:\n");
@@ -386,7 +386,7 @@ void print_usage(FILE* a_stream, int a_exit_code)
         fprintf(a_stream, "  -t, --threads      Number of parallel threads.\n");
         fprintf(a_stream, "  -H, --header       Request headers -can add multiple ie -H<> -H<>...\n");
         fprintf(a_stream, "  -l, --seconds      Run for <N> seconds .\n");
-        fprintf(a_stream, "  -r, --rate         Max Request Rate.\n");
+        fprintf(a_stream, "  -A, --rate         Max Request Rate.\n");
         fprintf(a_stream, "  -M, --mode         Requests mode [roundrobin|sequential|random].\n");
         //fprintf(a_stream, "  -c, --checksum   Checksum.\n");
         fprintf(a_stream, "  -R, --recv_buffer  Socket receive buffer size.\n");
@@ -396,7 +396,7 @@ void print_usage(FILE* a_stream, int a_exit_code)
 
         fprintf(a_stream, "  \n");
         fprintf(a_stream, "Print Options:\n");
-        fprintf(a_stream, "  -x, --verbose      Verbose logging\n");
+        fprintf(a_stream, "  -v, --verbose      Verbose logging\n");
         fprintf(a_stream, "  -c, --color        Color\n");
         fprintf(a_stream, "  -q, --quiet        Suppress progress output\n");
 
@@ -469,7 +469,7 @@ int main(int argc, char** argv)
         struct option l_long_options[] =
                 {
                 { "help",         0, 0, 'h' },
-                { "version",      0, 0, 'v' },
+                { "version",      0, 0, 'r' },
                 { "url_file",     1, 0, 'u' },
                 { "no_wildcards", 0, 0, 'w' },
                 { "cipher",       1, 0, 'y' },
@@ -479,14 +479,14 @@ int main(int argc, char** argv)
                 { "keep_alive",   0, 0, 'k' },
                 { "threads",      1, 0, 't' },
                 { "header",       1, 0, 'H' },
-                { "rate",         1, 0, 'r' },
+                { "rate",         1, 0, 'A' },
                 { "mode",         1, 0, 'M' },
                 { "seconds",      1, 0, 'l' },
                 { "recv_buffer",  1, 0, 'R' },
                 { "send_buffer",  1, 0, 'S' },
                 { "no_delay",     0, 0, 'D' },
                 { "timeout",      1, 0, 'T' },
-                { "verbose",      0, 0, 'x' },
+                { "verbose",      0, 0, 'v' },
                 { "color",        0, 0, 'c' },
                 { "quiet",        0, 0, 'q' },
                 { "http_load",    1, 0, 'X' },
@@ -530,7 +530,7 @@ int main(int argc, char** argv)
 
         }
 
-        while ((l_opt = getopt_long_only(argc, argv, "hvku:wy:p:f:N:t:H:r:M:l:R:S:DT:xcqX:BP:G:", l_long_options, &l_option_index)) != -1)
+        while ((l_opt = getopt_long_only(argc, argv, "hrku:wy:p:f:N:t:H:A:M:l:R:S:DT:vcqX:BP:G:", l_long_options, &l_option_index)) != -1)
         {
 
                 if (optarg)
@@ -554,7 +554,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 // Version
                 // ---------------------------------------
-                case 'v':
+                case 'r':
                 {
                         print_version(stdout, 0);
                         break;
@@ -698,7 +698,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 // rate
                 // ---------------------------------------
-                case 'r':
+                case 'A':
                 {
                         int l_rate = atoi(optarg);
                         if (l_rate < 1)
@@ -808,7 +808,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 // verbose
                 // ---------------------------------------
-                case 'x':
+                case 'v':
                         l_settings.m_verbose = true;
                         l_hlx_client->set_verbose(true);
                         break;

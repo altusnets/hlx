@@ -321,7 +321,7 @@ void print_usage(FILE* a_stream, int a_exit_code)
         fprintf(a_stream, "Usage: hle -u [http[s]://]hostname[:port]/path [options]\n");
         fprintf(a_stream, "Options are:\n");
         fprintf(a_stream, "  -h, --help           Display this help and exit.\n");
-        fprintf(a_stream, "  -v, --version        Display the version number and exit.\n");
+        fprintf(a_stream, "  -r, --version        Display the version number and exit.\n");
         fprintf(a_stream, "  \n");
 
         fprintf(a_stream, "URL Options -or without parameter\n");
@@ -355,7 +355,7 @@ void print_usage(FILE* a_stream, int a_exit_code)
         fprintf(a_stream, "  \n");
 
         fprintf(a_stream, "Print Options:\n");
-        fprintf(a_stream, "  -r, --verbose        Verbose logging\n");
+        fprintf(a_stream, "  -v, --verbose        Verbose logging\n");
         fprintf(a_stream, "  -c, --color          Color\n");
         fprintf(a_stream, "  -q, --quiet          Suppress output\n");
         fprintf(a_stream, "  -s, --show_progress  Show progress\n");
@@ -424,7 +424,7 @@ int main(int argc, char** argv)
         struct option l_long_options[] =
                 {
                 { "help",           0, 0, 'h' },
-                { "version",        0, 0, 'v' },
+                { "version",        0, 0, 'r' },
                 { "url",            1, 0, 'u' },
                 { "host_file",      1, 0, 'f' },
                 { "host_file_json", 1, 0, 'J' },
@@ -444,7 +444,7 @@ int main(int argc, char** argv)
                 { "ssl_sni",        0, 0, 'N' },
                 { "ssl_ca_file",    1, 0, 'F' },
                 { "ssl_ca_path",    1, 0, 'L' },
-                { "verbose",        0, 0, 'r' },
+                { "verbose",        0, 0, 'v' },
                 { "color",          0, 0, 'c' },
                 { "quiet",          0, 0, 'q' },
                 { "show_progress",  0, 0, 's' },
@@ -534,7 +534,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 // Version
                 // ---------------------------------------
-                case 'v':
+                case 'r':
                 {
                         print_version(stdout, 0);
                         break;
@@ -750,7 +750,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 // verbose
                 // ---------------------------------------
-                case 'r':
+                case 'v':
                 {
                         l_settings.m_verbose = true;
                         l_hlx_client->set_verbose(true);

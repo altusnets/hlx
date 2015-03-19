@@ -221,7 +221,7 @@ public:
         bool is_done(void) const {return (m_num_fetched == m_num_fetches);}
         bool has_available_fetches(void) const
         {
-                return ((m_num_fetches == -1) || (m_num_pending < m_num_fetches));
+                return ((m_num_fetches == -1) || (m_num_pending <= m_num_fetches));
         }
         bool reqlet_give_and_can_reuse_conn(reqlet *a_reqlet)
         {
@@ -592,7 +592,7 @@ reqlet *t_client::try_get_resolved(void)
 //: ----------------------------------------------------------------------------
 void *t_client::evr_loop_file_writeable_cb(void *a_data)
 {
-        //NDBG_PRINT("%sWRITEABLE%s %p\n", ANSI_COLOR_FG_BLUE, ANSI_COLOR_OFF, l_nconn);
+        //NDBG_PRINT("%sWRITEABLE%s %p\n", ANSI_COLOR_FG_BLUE, ANSI_COLOR_OFF, a_data);
         if(!a_data)
         {
                 return NULL;
@@ -605,8 +605,10 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
         // Cancel last timer
         l_t_client->m_evr_loop->cancel_timer(&(l_nconn->m_timer_obj));
 
+#if 0
         if (false == l_t_client->has_available_fetches())
                 return NULL;
+#endif
 
         int32_t l_status = STATUS_OK;
         l_status = l_nconn->run_state_machine(l_t_client->m_evr_loop, l_reqlet->m_host_info);
@@ -648,8 +650,7 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
 //: ----------------------------------------------------------------------------
 void *t_client::evr_loop_file_readable_cb(void *a_data)
 {
-        //NDBG_PRINT("%sREADABLE%s %p\n", ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF, l_nconn);
-
+        //NDBG_PRINT("%sREADABLE%s %p\n", ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF, a_data);
         if(!a_data)
         {
                 //NDBG_PRINT("a_data == NULL\n");
@@ -1271,6 +1272,7 @@ int hlx_client::run(void)
         l_settings.m_request_mode = m_request_mode;
         l_settings.m_num_end_fetches = m_num_end_fetches;
         l_settings.m_connect_only = m_connect_only;
+        l_settings.m_num_reqs_per_conn = m_num_reqs_per_conn;
         l_settings.m_sock_opt_recv_buf_size = m_sock_opt_recv_buf_size;
         l_settings.m_sock_opt_send_buf_size = m_sock_opt_send_buf_size;
         l_settings.m_sock_opt_no_delay = m_sock_opt_no_delay;
@@ -1524,7 +1526,7 @@ int hlx_client::set_host_list(host_list_t &a_host_list)
 
         }
 
-        m_num_end_fetches = 1;
+        m_num_end_fetches = m_reqlet_vector.size();
 
         return HLX_CLIENT_STATUS_OK;
 }
@@ -1566,7 +1568,7 @@ int hlx_client::set_server_list(server_list_t &a_server_list)
 
         }
 
-        m_num_end_fetches = 1;
+        m_num_end_fetches = m_reqlet_vector.size();
 
         return HLX_CLIENT_STATUS_OK;
 
@@ -2674,6 +2676,8 @@ bool hlx_client::done(void)
         if(m_num_end_fetches > 0)
         {
                 uint32_t l_num_end_fetches = (uint32_t)m_num_end_fetches;
+                //NDBG_PRINT("l_num_end_fetches: %u\n", l_num_end_fetches);
+                //NDBG_PRINT("m_num_get:         %u\n", m_num_get);
                 return (m_num_get >= l_num_end_fetches);
         }
         else
