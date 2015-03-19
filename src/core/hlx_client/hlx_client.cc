@@ -131,9 +131,11 @@ typedef struct settings_struct
         uint32_t m_timeout_s;
         int32_t m_rate;
         request_mode_t m_request_mode;
-        int32_t m_end_fetches;
+        int32_t m_num_end_fetches;
         int32_t m_run_time_s;
         bool m_connect_only;
+        int32_t m_num_reqs_per_conn;
+
 
         // tcp options
         uint32_t m_sock_opt_recv_buf_size;
@@ -169,9 +171,10 @@ typedef struct settings_struct
                 m_timeout_s(10),
                 m_rate(-1),
                 m_request_mode(REQUEST_MODE_ROUND_ROBIN),
-                m_end_fetches(-1),
+                m_num_end_fetches(-1),
                 m_run_time_s(-1),
                 m_connect_only(false),
+                m_num_reqs_per_conn(-1),
                 m_sock_opt_recv_buf_size(0),
                 m_sock_opt_send_buf_size(0),
                 m_sock_opt_no_delay(false),
@@ -349,9 +352,10 @@ t_client::t_client(const settings_struct_t &a_settings,
         COPY_SETTINGS(m_timeout_s);
         COPY_SETTINGS(m_rate);
         COPY_SETTINGS(m_request_mode);
-        COPY_SETTINGS(m_end_fetches);
+        COPY_SETTINGS(m_num_end_fetches);
         COPY_SETTINGS(m_run_time_s);
         COPY_SETTINGS(m_connect_only);
+        COPY_SETTINGS(m_num_reqs_per_conn);
         COPY_SETTINGS(m_sock_opt_recv_buf_size);
         COPY_SETTINGS(m_sock_opt_send_buf_size);
         COPY_SETTINGS(m_sock_opt_no_delay);
@@ -910,7 +914,7 @@ nconn *t_client::create_new_nconn(uint32_t a_id, const reqlet &a_reqlet)
                 // TODO SET OPTIONS!!!
                 l_nconn = new nconn_tcp(m_settings.m_verbose,
                                         m_settings.m_color,
-                                        1,
+                                        m_settings.m_num_reqs_per_conn,
                                         true,
                                         false,
                                         m_settings.m_connect_only);
@@ -920,7 +924,7 @@ nconn *t_client::create_new_nconn(uint32_t a_id, const reqlet &a_reqlet)
                 // TODO SET OPTIONS!!!
                 l_nconn = new nconn_ssl(m_settings.m_verbose,
                                         m_settings.m_color,
-                                        1,
+                                        m_settings.m_num_reqs_per_conn,
                                         true,
                                         false,
                                         m_settings.m_connect_only);
@@ -1003,6 +1007,10 @@ int32_t t_client::start_connections(void)
                    (l_nconn->m_scheme != l_reqlet->m_url.m_scheme))
                 {
                         // Destroy nconn and recreate
+                        //NDBG_PRINT("Destroy nconn and recreate: %u -- l_nconn->m_scheme: %d -- l_reqlet->m_url.m_scheme: %d\n",
+                        //                *i_conn,
+                        //                l_nconn->m_scheme,
+                        //                l_reqlet->m_url.m_scheme);
                         delete l_nconn;
                         l_nconn = NULL;
                 }
@@ -1017,6 +1025,7 @@ int32_t t_client::start_connections(void)
                                 NDBG_PRINT("Error performing create_new_nconn\n");
                                 return STATUS_ERROR;
                         }
+                        m_nconn_vector[*i_conn] = l_nconn;
                 }
 
                 // Assign the reqlet for this client
@@ -1241,11 +1250,8 @@ int hlx_client::run(void)
         }
 
         // Caculate num parallel per thread
-        uint32_t l_num_parallel_conn_per_thread = m_num_parallel / m_num_threads;
-        if(l_num_parallel_conn_per_thread < 1) l_num_parallel_conn_per_thread = 1;
-
-        uint32_t l_num_fetches_per_thread = m_end_fetches / m_num_threads;
-        uint32_t l_remainder_fetches = m_end_fetches % m_num_threads;
+        uint32_t l_num_fetches_per_thread = m_num_end_fetches / m_num_threads;
+        uint32_t l_remainder_fetches = m_num_end_fetches % m_num_threads;
 
         // -------------------------------------------
         // Bury the config into a settings struct
@@ -1258,12 +1264,12 @@ int hlx_client::run(void)
         l_settings.m_url = m_url;
         l_settings.m_header_map = m_header_map;
         l_settings.m_evr_loop_type = (evr_loop_type_t)m_evr_loop_type;
-        l_settings.m_num_parallel = l_num_parallel_conn_per_thread;
+        l_settings.m_num_parallel = m_num_parallel;
         l_settings.m_num_threads = m_num_threads;
         l_settings.m_timeout_s = m_timeout_s;
         l_settings.m_rate = m_rate;
         l_settings.m_request_mode = m_request_mode;
-        l_settings.m_end_fetches = m_end_fetches;
+        l_settings.m_num_end_fetches = m_num_end_fetches;
         l_settings.m_connect_only = m_connect_only;
         l_settings.m_sock_opt_recv_buf_size = m_sock_opt_recv_buf_size;
         l_settings.m_sock_opt_send_buf_size = m_sock_opt_send_buf_size;
@@ -1518,6 +1524,8 @@ int hlx_client::set_host_list(host_list_t &a_host_list)
 
         }
 
+        m_num_end_fetches = 1;
+
         return HLX_CLIENT_STATUS_OK;
 }
 
@@ -1557,6 +1565,8 @@ int hlx_client::set_server_list(server_list_t &a_server_list)
                 add_reqlet(l_reqlet);
 
         }
+
+        m_num_end_fetches = 1;
 
         return HLX_CLIENT_STATUS_OK;
 
@@ -1766,7 +1776,7 @@ void hlx_client::set_run_time_s(int32_t a_val)
 //: ----------------------------------------------------------------------------
 void hlx_client::set_end_fetches(int32_t a_val)
 {
-        m_end_fetches = a_val;
+        m_num_end_fetches = a_val;
 }
 
 //: ----------------------------------------------------------------------------
@@ -1774,11 +1784,11 @@ void hlx_client::set_end_fetches(int32_t a_val)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void hlx_client::set_max_reqs_per_conn(int32_t a_val)
+void hlx_client::set_num_reqs_per_conn(int32_t a_val)
 {
-        m_max_reqs_per_conn = a_val;
-        if((m_max_reqs_per_conn > 1) ||
-           (m_max_reqs_per_conn < 0))
+        m_num_reqs_per_conn = a_val;
+        if((m_num_reqs_per_conn > 1) ||
+           (m_num_reqs_per_conn < 0))
         {
                 set_header("Connection", "keep-alive");
         }
@@ -1987,8 +1997,8 @@ hlx_client::hlx_client(void):
         m_show_summary(false),
 
         m_rate(-1),
-        m_end_fetches(-1),
-        m_max_reqs_per_conn(1),
+        m_num_end_fetches(-1),
+        m_num_reqs_per_conn(1),
         m_run_time_s(-1),
         m_request_mode(REQUEST_MODE_ROUND_ROBIN),
         m_split_requests_by_thread(true),
@@ -2661,7 +2671,15 @@ void hlx_client::display_results_line(void)
 //: ----------------------------------------------------------------------------
 bool hlx_client::done(void)
 {
-        return (m_num_get >= m_num_reqlets);
+        if(m_num_end_fetches > 0)
+        {
+                uint32_t l_num_end_fetches = (uint32_t)m_num_end_fetches;
+                return (m_num_get >= l_num_end_fetches);
+        }
+        else
+        {
+                return false;
+        }
 }
 
 //: ----------------------------------------------------------------------------

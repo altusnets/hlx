@@ -103,7 +103,6 @@ public:
         // -------------------------------------------------
         // Const
         // -------------------------------------------------
-        static const scheme_t m_scheme = SCHEME_NONE;
         static const int32_t  m_opt_unhandled = 12345;
 
         nconn(bool a_verbose,
@@ -112,6 +111,7 @@ public:
               bool a_save_response_in_reqlet = false,
               bool a_collect_stats = false,
               bool a_connect_only = false):
+                m_scheme(SCHEME_NONE),
                 m_verbose(a_verbose),
                 m_color(a_color),
                 m_host(),
@@ -150,7 +150,7 @@ public:
 
         bool can_reuse(void)
         {
-                //NDBG_PRINT("CONN[%u] num / max %ld / %ld \n", m_connection_id, m_num_reqs, m_max_reqs_per_conn);
+                //NDBG_PRINT("CONN ka %d / max %ld / %ld \n", m_server_response_supports_keep_alives, m_num_reqs, m_max_reqs_per_conn);
                 if(m_server_response_supports_keep_alives &&
                    ((m_max_reqs_per_conn == -1) || (m_num_reqs < m_max_reqs_per_conn)))
                 {
@@ -183,6 +183,7 @@ public:
         // Public members
         // -------------------------------------------------
         // TODO hide this!
+        scheme_t m_scheme;
         bool m_verbose;
         bool m_color;
         std::string m_host;

@@ -168,7 +168,7 @@ public:
 
         void set_run_time_s(int32_t a_val);
         void set_end_fetches(int32_t a_val);
-        void set_max_reqs_per_conn(int32_t a_val);
+        void set_num_reqs_per_conn(int32_t a_val);
         void set_rate(int32_t a_val);
         void set_request_mode(request_mode_t a_mode);
 
@@ -268,8 +268,8 @@ private:
         bool m_show_summary;
 
         int32_t m_rate;
-        int32_t m_end_fetches;
-        int64_t m_max_reqs_per_conn;
+        int32_t m_num_end_fetches;
+        int64_t m_num_reqs_per_conn;
         int32_t m_run_time_s;
         request_mode_t m_request_mode;
         bool m_split_requests_by_thread;

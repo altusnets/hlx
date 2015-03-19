@@ -652,7 +652,7 @@ int main(int argc, char** argv)
                                 print_usage(stdout, -1);
                         }
 
-                        l_hlx_client->set_max_reqs_per_conn(l_max_reqs_per_conn);
+                        l_hlx_client->set_num_reqs_per_conn(l_max_reqs_per_conn);
                         break;
                 }
 
@@ -661,7 +661,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 case 'k':
                 {
-                        l_hlx_client->set_max_reqs_per_conn(-1);
+                        l_hlx_client->set_num_reqs_per_conn(-1);
                         break;
                 }
 
