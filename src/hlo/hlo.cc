@@ -189,7 +189,6 @@ private:
         }
 
         int32_t start_connections(void);
-        int32_t add_avail(reqlet *a_reqlet);
         int32_t cleanup_connection(nconn *a_nconn, bool a_cancel_timer = true);
         int32_t create_request(nconn &ao_conn, reqlet &a_reqlet);
         nconn *create_new_nconn(uint32_t a_id, const reqlet &a_reqlet);
@@ -943,26 +942,6 @@ void t_client::get_stats_copy(tag_stat_map_t &ao_tag_stat_map)
         {
                 ao_tag_stat_map[(*i_reqlet)->get_label()] = (*i_reqlet)->m_stat_agg;
         }
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int32_t t_client::add_avail(reqlet *a_reqlet)
-{
-
-        // Add to available list...
-        //--m_unresolved_count;
-
-        //if(a_reqlet)
-        //      NDBG_PRINT("Add available: a_reqlet: %p %sHOST%s: %s\n", a_reqlet, ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF, a_reqlet->m_url.m_host.c_str());
-
-        m_reqlet_avail_list.push_back(a_reqlet);
-
-        return STATUS_OK;
-
 }
 
 //: ----------------------------------------------------------------------------

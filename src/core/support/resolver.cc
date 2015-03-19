@@ -114,8 +114,6 @@ int32_t resolver::cached_resolve(std::string &a_host,
         a_host_info.m_sa_len = sizeof(a_host_info.m_sa);
         memset((void*) &a_host_info.m_sa, 0, a_host_info.m_sa_len);
 
-        //NDBG_PRINT("RESOLVE:\n");
-
         // ---------------------------------------
         // get address...
         // ---------------------------------------

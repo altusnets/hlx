@@ -436,6 +436,7 @@ int main(int argc, char** argv)
 
         // Turn on wildcarding by default
         l_hlx_client->set_wildcarding(true);
+        l_hlx_client->set_split_requests_by_thread(false);
 
         // -------------------------------------------
         // Setup default headers before the user
@@ -905,12 +906,22 @@ int main(int argc, char** argv)
         // Ingest URL File or URL from command line
         // if one...
         // -------------------------------------------
-        if(l_url_file_str.length()) {
-                l_hlx_client->set_url_file(l_url_file_str);
+        if(l_url_file_str.length())
+        {
+                int32_t l_status;
+                l_status = l_hlx_client->add_url_file(l_url_file_str);
+                if(HLX_CLIENT_STATUS_OK != l_status)
+                {
+                        printf("Error: adding url file: %s\n", l_url_file_str.c_str());
+                        return -1;
+                }
                 // TODO Check status
-        } else if(l_url.length()) {
-                l_hlx_client->set_url(l_url);
-        } else {
+        }
+        else if(l_url.length())
+        {
+                l_hlx_client->add_url(l_url);
+        } else
+        {
                 fprintf(stdout, "Error: No specified URLs on cmd line or in file with -u.\n");
                 print_usage(stdout, -1);
         }

@@ -144,12 +144,18 @@ public:
 
         // url
         void set_url(const std::string &a_url);
-        int32_t set_url_file(const std::string &a_url_file);
         void set_wildcarding(bool a_val);
 
         // Host list
         int set_host_list(host_list_t &a_host_list);
         int set_server_list(server_list_t &a_server_list);
+
+        // Specifying urls instead of hosts
+        int32_t add_url(std::string &a_url);
+        int32_t add_url_file(std::string &a_url_file);
+
+        // Split requests
+        void set_split_requests_by_thread(bool a_val);
 
         // Run options
         void set_connect_only(bool a_val);
@@ -198,9 +204,10 @@ public:
         // Support
         int32_t append_summary(reqlet *a_reqlet);
         void up_done(bool a_error);
+        void up_get(void);
         bool done(void);
         reqlet *try_get_resolved(void);
-
+        void up_resolved(bool a_error);
 
         // ---------------------------------------
         // Legacy Display/status
@@ -234,10 +241,9 @@ private:
         // reqlets
         reqlet *get_reqlet(void);
         int32_t add_reqlet(reqlet *a_reqlet);
-        uint32_t get_num_reqlets(void) {return m_num_reqlets;};
-        uint32_t get_num_get(void) {return m_num_get;};
-        bool empty(void) {return m_reqlet_vector.empty();};
-        void up_resolved(bool a_error) {if(a_error)++m_num_error; else ++m_num_resolved;};
+        uint32_t get_num_reqlets(void);
+        uint32_t get_num_get(void);
+        bool empty(void);
 
         // -------------------------------------------------
         // Private members
@@ -266,6 +272,7 @@ private:
         int64_t m_max_reqs_per_conn;
         int32_t m_run_time_s;
         request_mode_t m_request_mode;
+        bool m_split_requests_by_thread;
 
         // Stats
         uint64_t m_start_time_ms;
@@ -293,7 +300,6 @@ private:
 
         // Reqlets
         reqlet_vector_t m_reqlet_vector;
-        uint32_t m_reqlet_vector_idx;
         pthread_mutex_t m_mutex;
         uint32_t m_num_reqlets;
         uint32_t m_num_get;

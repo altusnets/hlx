@@ -33,6 +33,7 @@
 #include "reqlet.h"
 #include "nconn_ssl.h"
 #include "nconn_tcp.h"
+#include "tinymt64.h"
 
 #include <string.h>
 
@@ -200,7 +201,8 @@ public:
         // -------------------------------------------------
         // Public methods
         // -------------------------------------------------
-        t_client(const settings_struct_t &a_settings);
+        t_client(const settings_struct_t &a_settings,
+                 reqlet_vector_t a_reqlet_vector);
 
         ~t_client();
 
@@ -249,6 +251,9 @@ private:
         int32_t cleanup_connection(nconn *a_nconn, bool a_cancel_timer = true);
         int32_t create_request(nconn &ao_conn, reqlet &a_reqlet);
         nconn *create_new_nconn(uint32_t a_id, const reqlet &a_reqlet);
+        reqlet *get_reqlet(void);
+        reqlet *try_get_resolved(void);
+        void limit_rate();
 
         // -------------------------------------------------
         // Private members
@@ -273,6 +278,16 @@ private:
         // Get evr_loop
         evr_loop *m_evr_loop;
 
+        // For rate limiting
+        uint64_t m_rate_delta_us;
+        uint64_t m_last_get_req_us;
+
+        // Reqlet vectors
+        reqlet_vector_t m_reqlet_vector;
+        uint32_t m_reqlet_vector_idx;
+
+        void *m_rand_ptr;
+
 };
 
 //: ----------------------------------------------------------------------------
@@ -286,7 +301,8 @@ __thread t_client *g_t_client = NULL;
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
 #define COPY_SETTINGS(_field) m_settings._field = a_settings._field
-t_client::t_client(const settings_struct_t &a_settings):
+t_client::t_client(const settings_struct_t &a_settings,
+                   reqlet_vector_t a_reqlet_vector):
         m_t_run_thread(),
         m_settings(),
         m_stopped(false),
@@ -298,11 +314,17 @@ t_client::t_client(const settings_struct_t &a_settings):
         m_num_pending(0),
         m_run_time_s(-1),
         m_start_time_s(0),
-        m_evr_loop(NULL)
+        m_evr_loop(NULL),
+        m_rate_delta_us(0),
+        m_last_get_req_us(0),
+        m_reqlet_vector(a_reqlet_vector),
+        m_reqlet_vector_idx(0),
+        m_rand_ptr(NULL)
 {
         for(int32_t i_conn = 0; i_conn < a_settings.m_num_parallel; ++i_conn)
         {
                 m_nconn_vector[i_conn] = NULL;
+                //NDBG_PRINT("ADDING i_conn: %u\n", i_conn);
                 m_conn_free_list.push_back(i_conn);
         }
 
@@ -318,6 +340,10 @@ t_client::t_client(const settings_struct_t &a_settings):
         COPY_SETTINGS(m_num_parallel);
         COPY_SETTINGS(m_num_threads);
         COPY_SETTINGS(m_timeout_s);
+        COPY_SETTINGS(m_rate);
+        COPY_SETTINGS(m_request_mode);
+        COPY_SETTINGS(m_end_fetches);
+        COPY_SETTINGS(m_run_time_s);
         COPY_SETTINGS(m_connect_only);
         COPY_SETTINGS(m_sock_opt_recv_buf_size);
         COPY_SETTINGS(m_sock_opt_send_buf_size);
@@ -331,6 +357,18 @@ t_client::t_client(const settings_struct_t &a_settings):
         COPY_SETTINGS(m_ssl_ca_file);
         COPY_SETTINGS(m_ssl_ca_path);
         COPY_SETTINGS(m_hlx_client);
+
+        // Set rate
+        if(m_settings.m_rate != -1)
+        {
+                m_rate_delta_us = 1000000 / m_settings.m_rate;
+        }
+
+        // Initialize rand...
+        m_rand_ptr = malloc(sizeof(tinymt64_t));
+        tinymt64_t *l_rand_ptr = (tinymt64_t*)m_rand_ptr;
+        tinymt64_init(l_rand_ptr, get_time_us());
+
 
 }
 
@@ -357,6 +395,23 @@ t_client::~t_client()
         }
 }
 
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void t_client::limit_rate()
+{
+        if(m_settings.m_rate != -1)
+        {
+                uint64_t l_cur_time_us = get_time_us();
+                if((l_cur_time_us - m_last_get_req_us) < m_rate_delta_us)
+                {
+                        usleep(m_rate_delta_us - (l_cur_time_us - m_last_get_req_us));
+                }
+                m_last_get_req_us = get_time_us();
+        }
+}
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -401,6 +456,123 @@ void t_client::stop(void)
         }
 }
 
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+reqlet *t_client::get_reqlet(void)
+{
+        reqlet *l_reqlet = NULL;
+
+        //NDBG_PRINT("%sREQLST%s[%lu]: .\n", ANSI_COLOR_FG_CYAN, ANSI_COLOR_OFF, m_reqlet_list.size());
+
+        // TODO REMOVE
+#if 0
+        if(!m_reqlet_vector.empty() &&
+           (m_num_get < m_num_reqlets))
+        {
+                l_reqlet = m_reqlet_vector[m_reqlet_vector_idx];
+                ++m_num_get;
+                ++m_reqlet_vector_idx;
+        }
+#endif
+
+        //NDBG_PRINT("m_rate_limit = %d m_rate_delta_us = %lu\n", m_rate_limit, m_rate_delta_us);
+        //NDBG_PRINT("m_reqlet_avail_list.size(): %d\n", (int)m_reqlet_avail_list.size());
+
+        if(0 == m_reqlet_vector.size())
+        {
+                return NULL;
+        }
+
+        limit_rate();
+
+        // Based on mode
+        switch(m_settings.m_request_mode)
+        {
+        case REQUEST_MODE_ROUND_ROBIN:
+        {
+                uint32_t l_next_index = ((m_reqlet_vector_idx + 1) >= m_reqlet_vector.size()) ? 0 : m_reqlet_vector_idx + 1;
+                //NDBG_PRINT("m_last_reqlet_index: %d\n", m_last_reqlet_index);
+                m_reqlet_vector_idx = l_next_index;
+                l_reqlet = m_reqlet_vector[m_reqlet_vector_idx];
+                break;
+        }
+        case REQUEST_MODE_SEQUENTIAL:
+        {
+                l_reqlet = m_reqlet_vector[m_reqlet_vector_idx];
+                if(l_reqlet->is_done())
+                {
+                        uint32_t l_next_index = ((m_reqlet_vector_idx + 1) >= m_reqlet_vector.size()) ? 0 : m_reqlet_vector_idx + 1;
+                        l_reqlet->reset();
+                        m_reqlet_vector_idx = l_next_index;
+                        l_reqlet = m_reqlet_vector[m_reqlet_vector_idx];
+                }
+                break;
+        }
+        case REQUEST_MODE_RANDOM:
+        {
+                tinymt64_t *l_rand_ptr = (tinymt64_t*)m_rand_ptr;
+                uint32_t l_next_index = (uint32_t)(tinymt64_generate_uint64(l_rand_ptr) % m_reqlet_vector.size());
+                m_reqlet_vector_idx = l_next_index;
+                l_reqlet = m_reqlet_vector[m_reqlet_vector_idx];
+                break;
+        }
+        default:
+        {
+                // Default to round robin
+                uint32_t l_next_index = ((m_reqlet_vector_idx + 1) >= m_reqlet_vector.size()) ? 0 : m_reqlet_vector_idx + 1;
+                m_reqlet_vector_idx = l_next_index;
+                l_reqlet = m_reqlet_vector[m_reqlet_vector_idx];
+        }
+        }
+
+
+        if(l_reqlet)
+        {
+                l_reqlet->bump_num_requested();
+        }
+
+        m_settings.m_hlx_client->up_get();
+        ++m_reqlet_vector_idx;
+
+        //NDBG_PRINT("%sREQLET%s[%p]: Gettin to repo.\n", ANSI_COLOR_BG_GREEN, ANSI_COLOR_OFF, l_reqlet);
+        //NDBG_PRINT("%sREQLET%s[%p]: Gettin to repo.\n", ANSI_COLOR_BG_RED, ANSI_COLOR_OFF, *m_reqlet_list_iter);
+
+        return l_reqlet;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+reqlet *t_client::try_get_resolved(void)
+{
+        reqlet *l_reqlet = NULL;
+        int32_t l_status;
+
+        l_reqlet = get_reqlet();
+        if(NULL == l_reqlet)
+        {
+                return NULL;
+        }
+
+        // Try resolve
+        l_status = l_reqlet->resolve();
+        if(l_status != STATUS_OK)
+        {
+                // TODO Set response and error
+                m_settings.m_hlx_client->up_resolved(true);
+                m_settings.m_hlx_client->append_summary(l_reqlet);
+                return NULL;
+        }
+
+        m_settings.m_hlx_client->up_resolved(false);
+        return l_reqlet;
+
+}
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -603,28 +775,6 @@ void *t_client::t_run(void *a_nothing)
         // Set thread local
         g_t_client = this;
 
-#if 0
-        // Add the urls
-        if(!m_url.empty())
-        {
-                l_status = add_url(m_url);
-                if(l_status != STATUS_OK)
-                {
-                        m_stopped = true;
-                        return NULL;
-                }
-        }
-        if(!m_url_file.empty())
-        {
-                l_status = add_url_file(m_url_file);
-                if(l_status != STATUS_OK)
-                {
-                        m_stopped = true;
-                        return NULL;
-                }
-        }
-#endif
-
         // Create loop
         m_evr_loop = new evr_loop(
                         evr_loop_file_readable_cb,
@@ -702,6 +852,8 @@ nconn *t_client::create_new_nconn(uint32_t a_id, const reqlet &a_reqlet)
 {
         nconn *l_nconn = NULL;
 
+        //NDBG_PRINT("CREATING NEW CONNECTION: id: %u\n", a_id);
+
         if(a_reqlet.m_url.m_scheme == nconn::SCHEME_TCP)
         {
                 // TODO SET OPTIONS!!!
@@ -722,6 +874,8 @@ nconn *t_client::create_new_nconn(uint32_t a_id, const reqlet &a_reqlet)
                                         false,
                                         m_settings.m_connect_only);
         }
+
+        l_nconn->set_id(a_id);
 
         // -------------------------------------------
         // Set options
@@ -778,9 +932,11 @@ int32_t t_client::start_connections(void)
              )
         {
 
+                //NDBG_PRINT("STARTING i_conn: %u\n", *i_conn);
+
                 // Loop trying to get reqlet
                 l_reqlet = NULL;
-                while(((l_reqlet = l_hlx_client->try_get_resolved()) == NULL) && (!l_hlx_client->done()));
+                while(((l_reqlet = try_get_resolved()) == NULL) && (!l_hlx_client->done()));
                 if((l_reqlet == NULL) && l_hlx_client->done())
                 {
                         // Bail out
@@ -937,6 +1093,8 @@ int32_t t_client::cleanup_connection(nconn *a_nconn, bool a_cancel_timer)
         a_nconn->reset_stats();
         a_nconn->cleanup(m_evr_loop);
 
+        //NDBG_PRINT("%sADDING_BACK%s: %u\n", ANSI_COLOR_BG_GREEN, ANSI_COLOR_OFF, (uint32_t)l_conn_id);
+
         // Add back to free list
         m_conn_free_list.push_back(l_conn_id);
         m_conn_used_set.erase(l_conn_id);
@@ -1074,6 +1232,32 @@ int hlx_client::run(void)
         // -------------------------------------------
         for(uint32_t i_client_idx = 0; i_client_idx < m_num_threads; ++i_client_idx)
         {
+                t_client *l_t_client = NULL;
+                if(m_split_requests_by_thread)
+                {
+                        reqlet_vector_t l_reqlet_vector;
+
+                        // Calculate index
+                        uint32_t l_idx = i_client_idx*(m_reqlet_vector.size()/m_num_threads);
+                        uint32_t l_len = m_reqlet_vector.size()/m_num_threads;
+
+                        if(i_client_idx + 1 == m_num_threads)
+                        {
+                                // Get remainder
+                                l_len = m_reqlet_vector.size() - (i_client_idx * l_len);
+                        }
+                        for(uint32_t i_dx = 0; i_dx < l_len; ++i_dx)
+                        {
+                                l_reqlet_vector.push_back(m_reqlet_vector[l_idx + i_dx]);
+                        }
+
+                        l_t_client = new t_client(l_settings, l_reqlet_vector);
+                }
+                else
+                {
+                        l_t_client = new t_client(l_settings, m_reqlet_vector);
+                }
+
 
                 //if(a_settings.m_verbose)
                 //{
@@ -1081,7 +1265,6 @@ int hlx_client::run(void)
                 //}
 
                 // Construct with settings...
-                t_client *l_t_client = new t_client(l_settings);
                 for(header_map_t::iterator i_header = m_header_map.begin();
                     i_header != m_header_map.end();
                     ++i_header)
@@ -1089,9 +1272,11 @@ int hlx_client::run(void)
                         l_t_client->set_header(i_header->first, i_header->second);
                 }
 
+                // Set num fetches
                 if (i_client_idx == (m_num_threads - 1))
+                {
                         l_num_fetches_per_thread += l_remainder_fetches;
-
+                }
                 l_t_client->set_end_fetches(l_num_fetches_per_thread);
 
                 m_t_client_list.push_back(l_t_client);
@@ -1223,17 +1408,6 @@ void hlx_client::set_url(const std::string &a_url)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t hlx_client::set_url_file(const std::string &a_url_file)
-{
-        m_url_file = a_url_file;
-        return HLX_CLIENT_STATUS_OK;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
 void hlx_client::set_wildcarding(bool a_val)
 {
         m_wildcarding = a_val;
@@ -1335,6 +1509,123 @@ int hlx_client::set_server_list(server_list_t &a_server_list)
 
         return HLX_CLIENT_STATUS_OK;
 
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t hlx_client::add_url(std::string &a_url)
+{
+
+        // TODO
+        // Make threadsafe...
+
+        reqlet *l_reqlet = new reqlet((uint64_t)(m_reqlet_vector.size()));
+
+        // Initialize
+        int32_t l_status = HLX_CLIENT_STATUS_OK;
+        l_status = l_reqlet->init_with_url(a_url, m_wildcarding);
+        if(STATUS_OK != l_status)
+        {
+                NDBG_PRINT("Error performing init_with_url: %s\n", a_url.c_str());
+                return HLX_CLIENT_STATUS_ERROR;
+        }
+
+        // Add to list
+        add_reqlet(l_reqlet);
+
+        return HLX_CLIENT_STATUS_OK;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t hlx_client::add_url_file(std::string &a_url_file)
+{
+
+        FILE * l_file;
+        int32_t l_status = HLX_CLIENT_STATUS_OK;
+
+        l_file = fopen (a_url_file.c_str(),"r");
+        if (NULL == l_file)
+        {
+                NDBG_PRINT("Error opening file.  Reason: %s\n", strerror(errno));
+                return HLX_CLIENT_STATUS_ERROR;
+        }
+
+        //NDBG_PRINT("ADD_FILE: ADDING: %s\n", a_url_file.c_str());
+        //uint32_t l_num_added = 0;
+
+        ssize_t l_file_line_size = 0;
+        char *l_file_line = NULL;
+        size_t l_unused;
+        while((l_file_line_size = getline(&l_file_line,&l_unused,l_file)) != -1)
+        {
+
+                //NDBG_PRINT("LINE: %s", l_file_line);
+
+                std::string l_line(l_file_line);
+
+                if(!l_line.empty())
+                {
+                        //NDBG_PRINT("Add url: %s\n", l_line.c_str());
+
+                        l_line.erase( std::remove_if( l_line.begin(), l_line.end(), ::isspace ), l_line.end() );
+                        if(!l_line.empty())
+                        {
+                                l_status = add_url(l_line);
+                                if(STATUS_OK != l_status)
+                                {
+                                        NDBG_PRINT("Error performing addurl for url: %s\n", l_line.c_str());
+
+                                        if(l_file_line)
+                                        {
+                                                free(l_file_line);
+                                                l_file_line = NULL;
+                                        }
+                                        return HLX_CLIENT_STATUS_ERROR;
+                                }
+                        }
+                }
+
+                if(l_file_line)
+                {
+                        free(l_file_line);
+                        l_file_line = NULL;
+                }
+
+        }
+
+        //NDBG_PRINT("ADD_FILE: DONE: %s -- last line len: %d\n", a_url_file.c_str(), (int)l_file_line_size);
+        //if(l_file_line_size == -1)
+        //{
+        //        NDBG_PRINT("Error: getline errno: %d Reason: %s\n", errno, strerror(errno));
+        //}
+
+
+        l_status = fclose(l_file);
+        if (0 != l_status)
+        {
+                NDBG_PRINT("Error closing file.  Reason: %s\n", strerror(errno));
+                return HLX_CLIENT_STATUS_ERROR;
+        }
+
+        return HLX_CLIENT_STATUS_OK;
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::set_split_requests_by_thread(bool a_val)
+{
+        m_split_requests_by_thread = a_val;
 }
 
 //: ----------------------------------------------------------------------------
@@ -1636,9 +1927,9 @@ hlx_client::hlx_client(void):
         m_use_ai_cache(true),
         m_ai_cache(),
         // TODO Make define
-        m_num_parallel(64),
+        m_num_parallel(128),
         // TODO Make define
-        m_num_threads(8),
+        m_num_threads(4),
         // TODO Make define
         m_timeout_s(10),
         m_connect_only(false),
@@ -1649,6 +1940,7 @@ hlx_client::hlx_client(void):
         m_max_reqs_per_conn(1),
         m_run_time_s(-1),
         m_request_mode(REQUEST_MODE_ROUND_ROBIN),
+        m_split_requests_by_thread(true),
 
         m_start_time_ms(),
         m_last_display_time_ms(),
@@ -1674,7 +1966,6 @@ hlx_client::hlx_client(void):
         m_evr_loop_type(EVR_LOOP_EPOLL),
 
         m_reqlet_vector(),
-        m_reqlet_vector_idx(0),
         m_mutex(),
         m_num_reqlets(0),
         m_num_get(0),
@@ -2335,8 +2626,20 @@ bool hlx_client::done(void)
 //: ----------------------------------------------------------------------------
 void hlx_client::up_done(bool a_error)
 {
+        // TODO make threadsafe???
         ++m_num_done;
         if(a_error)++m_num_error;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::up_get(void)
+{
+        // TODO make threadsafe???
+        ++m_num_get;
 }
 
 //: ----------------------------------------------------------------------------
@@ -2473,89 +2776,64 @@ void hlx_client::display_summary(bool a_color)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-reqlet *hlx_client::get_reqlet(void)
-{
-        reqlet *l_reqlet = NULL;
-
-        //NDBG_PRINT("%sREQLST%s[%lu]: .\n", ANSI_COLOR_FG_CYAN, ANSI_COLOR_OFF, m_reqlet_list.size());
-
-        pthread_mutex_lock(&m_mutex);
-        if(!m_reqlet_vector.empty() &&
-           (m_num_get < m_num_reqlets))
-        {
-                l_reqlet = m_reqlet_vector[m_reqlet_vector_idx];
-                ++m_num_get;
-                ++m_reqlet_vector_idx;
-        }
-        pthread_mutex_unlock(&m_mutex);
-
-        //NDBG_PRINT("%sREQLET%s[%p]: Gettin to repo.\n", ANSI_COLOR_BG_GREEN, ANSI_COLOR_OFF, l_reqlet);
-        //NDBG_PRINT("%sREQLET%s[%p]: Gettin to repo.\n", ANSI_COLOR_BG_RED, ANSI_COLOR_OFF, *m_reqlet_list_iter);
-
-        return l_reqlet;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-reqlet *hlx_client::try_get_resolved(void)
-{
-        reqlet *l_reqlet = NULL;
-        int32_t l_status;
-
-        l_reqlet = get_reqlet();
-        if(NULL == l_reqlet)
-        {
-                return NULL;
-        }
-
-        // Try resolve
-        l_status = l_reqlet->resolve();
-        if(l_status != STATUS_OK)
-        {
-                // TODO Set response and error
-                up_resolved(true);
-                append_summary(l_reqlet);
-                return NULL;
-        }
-
-        up_resolved(false);
-        return l_reqlet;
-
-}
-
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
 int32_t hlx_client::add_reqlet(reqlet *a_reqlet)
 {
-
         //NDBG_PRINT("%sREQLST%s[%lu]: .\n", ANSI_COLOR_FG_CYAN, ANSI_COLOR_OFF, m_reqlet_list.size());
-
-        bool l_was_empty = false;
-        if(m_reqlet_vector.empty())
-        {
-                l_was_empty = true;
-        }
-
         //NDBG_PRINT("%sREQLET%s[%p]: Adding to repo.\n", ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF, a_reqlet);
         m_reqlet_vector.push_back(a_reqlet);
         ++m_num_reqlets;
-
-        if(l_was_empty)
-        {
-                m_reqlet_vector_idx = 0;
-                //NDBG_PRINT("%sREQLET%s[%p]: Adding to repo.\n", ANSI_COLOR_BG_RED, ANSI_COLOR_OFF, *m_reqlet_list_iter);
-        }
-
         //NDBG_PRINT("%sREQLET%s[%p]: Adding to repo.\n", ANSI_COLOR_FG_RED, ANSI_COLOR_OFF, *m_reqlet_list_iter);
-
         return STATUS_OK;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::up_resolved(bool a_error)
+{
+        pthread_mutex_lock(&m_mutex);
+        if(a_error)
+        {
+                ++m_num_error;
+        }
+        else
+        {
+                ++m_num_resolved;
+        }
+        pthread_mutex_unlock(&m_mutex);
+}
+
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+uint32_t hlx_client::get_num_reqlets(void)
+{
+        return m_num_reqlets;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+uint32_t hlx_client::get_num_get(void)
+{
+        return m_num_get;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+bool hlx_client::empty(void)
+{
+        return m_reqlet_vector.empty();
 }
 
 //: ----------------------------------------------------------------------------

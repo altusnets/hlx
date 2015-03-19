@@ -396,6 +396,10 @@ int main(int argc, char** argv)
         // For sighandler
         g_settings = &l_settings;
 
+        // Turn on wildcarding by default
+        l_hlx_client->set_wildcarding(false);
+        l_hlx_client->set_split_requests_by_thread(true);
+
         // -------------------------------------------
         // Setup default headers before the user
         // -------------------------------------------
