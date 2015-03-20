@@ -994,6 +994,10 @@ hlx_client::~hlx_client(void)
                 delete m_last_stat;
                 m_last_stat = NULL;
         }
+
+        // Delete resolver
+        delete resolver::get();
+
 }
 
 //: ----------------------------------------------------------------------------

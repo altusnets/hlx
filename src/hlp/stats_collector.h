@@ -2,7 +2,7 @@
 //: Copyright (C) 2014 Verizon.  All Rights Reserved.
 //: All Rights Reserved
 //:
-//: \file:    resolver.h
+//: \file:    stats_collector.h
 //: \details: TODO
 //: \author:  Reed P. Morrison
 //: \date:    02/07/2014
@@ -20,108 +20,104 @@
 //:   limitations under the License.
 //:
 //: ----------------------------------------------------------------------------
-#ifndef _RESOLVER_H
-#define _RESOLVER_H
+#ifndef _STATS_COLLECTOR_H
+#define _STATS_COLLECTOR_H
 
 //: ----------------------------------------------------------------------------
 //: Includes
 //: ----------------------------------------------------------------------------
 #include "ndebug.h"
-#include "host_info.h"
+#include "reqlet.h"
 
 #include <pthread.h>
+#include <strings.h>
+#include <math.h>
 
-#include <string>
 #include <map>
+#include <vector>
 
 //: ----------------------------------------------------------------------------
 //: Constants
 //: ----------------------------------------------------------------------------
-#define RESOLVER_DEFAULT_AI_CACHE_FILE "/tmp/addr_info_cache.json"
-
-
-//: ----------------------------------------------------------------------------
-//: Types
-//: ----------------------------------------------------------------------------
-// TODO Create struct with TTL for storing ai cache
-typedef std::map <std::string, std::string> ai_cache_map_t;
+#define STATS_COLLECTOR_DEFAULT_AGG_STATS_SIZE 1024
 
 //: ----------------------------------------------------------------------------
-//: Fwd Decl's
+//: Fwd' Decls
 //: ----------------------------------------------------------------------------
+
 
 //: ----------------------------------------------------------------------------
 //: Enums
 //: ----------------------------------------------------------------------------
 
+
 //: ----------------------------------------------------------------------------
-//: \details: TODO
+//: Types
 //: ----------------------------------------------------------------------------
-class resolver
+
+
+//: ----------------------------------------------------------------------------
+//: \details: reqlet_repo
+//: ----------------------------------------------------------------------------
+class stats_collector
 {
 public:
         // -------------------------------------------------
         // Public methods
         // -------------------------------------------------
-        int32_t init(std::string addr_info_cache_file = "", bool a_use_cache = false);
+        //int32_t add_stat(const std::string &a_tag, const req_stat_t &a_req_stat);
+        void display_results(double a_elapsed_time,
+                        uint32_t a_max_parallel,
+                        bool a_show_breakdown_flag = false,
+                        bool a_color = false);
+        void display_results_http_load_style(double a_elapsed_time,
+                        uint32_t a_max_parallel,
+                        bool a_show_breakdown_flag = false,
+                        bool a_one_line_flag = false);
 
-        ~resolver();
+        void display_results_line_desc(bool a_color_flag);
+        void display_results_line(bool a_color_flag);
 
-        // Settings...
-        void set_verbose(bool a_val) { m_verbose = a_val;}
-        void set_color(bool a_val) { m_color = a_val;}
-        void set_timeout_s(int32_t a_val) {m_timeout_s = a_val;}
-        int32_t cached_resolve(std::string &a_host,
-                               uint16_t a_port,
-                               host_info_t &a_host_info,
-                               std::string &ao_error);
-        int32_t sync_ai_cache(void);
-        int32_t read_ai_cache(const std::string &a_ai_cache_file);
+        void get_stats(total_stat_agg_t &ao_all_stats, bool a_get_breakdown, tag_stat_map_t &ao_breakdown_stats);
+        int32_t get_stats_json(char *l_json_buf, uint32_t l_json_buf_max_len);
+        void set_start_time_ms(uint64_t a_start_time_ms) {m_start_time_ms = a_start_time_ms;}
 
-        // -------------------------------------------------
-        // Class methods
-        // -------------------------------------------------
-        // Get the singleton instance
-        static resolver *get(void);
 
         // -------------------------------------------------
         // Public members
         // -------------------------------------------------
 
+        // -------------------------------------------------
+        // Class methods
+        // -------------------------------------------------
+    // Get the singleton instance
+    static stats_collector *get(void);
+
 private:
         // -------------------------------------------------
         // Private methods
         // -------------------------------------------------
-        DISALLOW_COPY_AND_ASSIGN(resolver)
-        resolver();
+        DISALLOW_COPY_AND_ASSIGN(stats_collector)
+        stats_collector();
 
         // -------------------------------------------------
         // Private members
         // -------------------------------------------------
-        bool m_is_initd;
-
-        // -------------------------------------------------
-        // Settings
-        // -------------------------------------------------
-        bool m_verbose;
-        bool m_color;
-        uint32_t m_timeout_s;
-        uint32_t m_use_cache;
-
-        pthread_mutex_t m_cache_mutex;
-        ai_cache_map_t m_ai_cache_map;
-        std::string m_ai_cache_file;
+        uint64_t m_start_time_ms;
+        uint64_t m_last_display_time_ms;
+        total_stat_agg_t m_last_stat;
 
         // -------------------------------------------------
         // Class members
         // -------------------------------------------------
         // the pointer to the singleton for the instance 
-        static resolver *m_singleton_ptr;
+        static stats_collector *m_singleton_ptr;
 
 };
 
-
 #endif
+
+
 
 
 

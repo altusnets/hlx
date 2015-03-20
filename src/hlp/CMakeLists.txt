@@ -27,11 +27,14 @@ cmake_minimum_required(VERSION 2.6.0)
 LIST(APPEND INST_HDRS ${HDRS})
 
 # include paths
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}
+include_directories(${CMAKE_CURRENT_SOURCE_DIR} 
 #${CMAKE_CURRENT_BINARY_DIR}
-    ../core/support
+    ../core/support/
+    ../core/evr/
     ../core/ndebug
-    ../core/hlx_client    
+    ../core/http_parser
+    ../core/tinymt
+    ../core/cityhash
 )
 
 #add_definitions(-std=c++0x)
@@ -39,10 +42,16 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}
 # Source files
 SET(SRCS
   main.cc
+  stats_collector.cc
+  t_client.cc
+  hlp.cc
 )
 
 # Headers
 SET(HDRS
+  stats_collector.h
+  t_client.h
+  hlp.h
 )
 
 # ============================================================
@@ -73,9 +82,9 @@ SET(HDRS
 
 
 # build and install hl
-add_executable(hlo_cmd ${HDRS} ${SRCS})
-SET_TARGET_PROPERTIES(hlo_cmd PROPERTIES OUTPUT_NAME "hlo")
-target_link_libraries(hlo_cmd
+add_executable(hlp_cmd ${HDRS} ${SRCS})
+SET_TARGET_PROPERTIES(hlp_cmd PROPERTIES OUTPUT_NAME "hlp")
+target_link_libraries(hlp_cmd
 ${CMAKE_BINARY_DIR}/src/core/libhlxcore.a
 pthread
 rt
@@ -85,10 +94,9 @@ tcmalloc
 profiler
 #asan
 #efence
-microhttpd
 )
 
-install(TARGETS hlo_cmd
+install(TARGETS hlp_cmd
         DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/
         COMPONENT Executables
         )

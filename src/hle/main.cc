@@ -57,14 +57,14 @@
 #endif
 #include <inttypes.h>
 
-// Json parser
-#include <jsoncpp/json/json.h>
-
 // Profiler
 #define ENABLE_PROFILER 1
 #ifdef ENABLE_PROFILER
 #include <google/profiler.h>
 #endif
+
+// json support
+#include "rapidjson/document.h"
 
 //: ----------------------------------------------------------------------------
 //: Constants
@@ -969,44 +969,54 @@ int main(int argc, char** argv)
                 l_read_size = fread(l_buf, 1, l_size, l_file);
                 if(l_read_size != l_size)
                 {
-                        NDBG_PRINT("Error performing fread.  Reason: %s [%d:%d]\n", strerror(errno), l_read_size, l_size);
+                        NDBG_PRINT("Error performing fread.  Reason: %s [%d:%d]\n",
+                                        strerror(errno), l_read_size, l_size);
                         return STATUS_ERROR;
                 }
                 std::string l_buf_str;
                 l_buf_str.assign(l_buf, l_size);
-                Json::Value l_json_value(Json::objectValue);
-                Json::Reader l_json_reader;
-                bool l_result = l_json_reader.parse(l_buf_str, l_json_value);
-                if (!l_result)
+
+
+                // NOTE: rapidjson assert's on errors -interestingly
+                rapidjson::Document l_doc;
+                l_doc.Parse(l_buf_str.c_str());
+                if(!l_doc.IsArray())
                 {
-                        NDBG_PRINT("Failed to parse JSON document: %s. Reason: %s\n", l_host_file_json_str.c_str(), l_json_reader.getFormattedErrorMessages().c_str());
-                        fclose(l_file);
-                        // Best effort -not checking return cuz we outtie
+                        NDBG_PRINT("Error reading json from file: %s.  Reason: data is not an array\n",
+                                        l_host_file_json_str.c_str());
                         return STATUS_ERROR;
                 }
 
-                // For each line add
-                for( Json::ValueIterator itr = l_json_value.begin() ; itr != l_json_value.end() ; itr++ )
+                // rapidjson uses SizeType instead of size_t.
+                for(rapidjson::SizeType i_record = 0; i_record < l_doc.Size(); ++i_record)
                 {
-                        const Json::Value &l_value = (*itr);
-                        if(l_value.isObject())
+                        if(!l_doc[i_record].IsObject())
                         {
-                                ns_hlx::host_t l_host;
-
-                                //
-                                // "host" : "irobdownload.blob.core.windows.net:443",
-                                // "hostname" : "irobdownload.blob.core.windows.net",
-                                // "id" : "DE4D",
-                                // "where" : "edge"
-
-                                l_host.m_host = l_value.get("host", "NO_HOST").asString();
-                                l_host.m_hostname = l_value.get("hostname", "NO_HOSTNAME").asString();
-                                l_host.m_id = l_value.get("id", "NO_ID").asString();
-                                l_host.m_where = l_value.get("where", "NO_WHERE").asString();
-                                // TODO Check exist...
-                                l_host_list.push_back(l_host);
+                                NDBG_PRINT("Error reading json from file: %s.  Reason: array membe not an object\n",
+                                                l_host_file_json_str.c_str());
+                                return STATUS_ERROR;
                         }
 
+                        ns_hlx::host_t l_host;
+
+                        // "host" : "irobdownload.blob.core.windows.net:443",
+                        // "hostname" : "irobdownload.blob.core.windows.net",
+                        // "id" : "DE4D",
+                        // "where" : "edge"
+
+                        if(l_doc[i_record].HasMember("host")) l_host.m_host = l_doc[i_record]["host"].GetString();
+                        else l_host.m_host = "NO_HOST";
+
+                        if(l_doc[i_record].HasMember("hostname")) l_host.m_hostname = l_doc[i_record]["hostname"].GetString();
+                        else l_host.m_hostname = "NO_HOSTNAME";
+
+                        if(l_doc[i_record].HasMember("id")) l_host.m_id = l_doc[i_record]["id"].GetString();
+                        else l_host.m_id = "NO_ID";
+
+                        if(l_doc[i_record].HasMember("where")) l_host.m_hostname = l_doc[i_record]["where"].GetString();
+                        else l_host.m_where = "NO_WHERE";
+
+                        l_host_list.push_back(l_host);
                 }
 
                 // ---------------------------------------

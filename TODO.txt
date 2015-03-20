@@ -1,5 +1,3 @@
 TODO:
-1. Add 3rd-party json parser -boot jsoncpp
-2. Make perf-tools/tcmalloc optional
-3. Make hlx_server with evr and boot microhttpd
-4. Remove leveldb and use json file for address cache.
+1. Make perf-tools/tcmalloc optional
+2. Make hlx_server with evr and boot microhttpd
