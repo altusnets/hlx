@@ -549,9 +549,6 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
                 add_stat_to_agg(l_reqlet->m_stat_agg, l_nconn->get_stats());
                 l_nconn->reset_stats();
 
-                l_reqlet->m_stat_agg.m_num_conn_completed++;
-                l_t_client->m_num_fetched++;
-
                 // Bump stats
                 if(l_status == STATUS_ERROR)
                 {
@@ -572,11 +569,13 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
 
                         if(l_can_reuse && l_can_reuse_conn)
                         {
+                                ++l_reqlet->m_stat_agg.m_num_conn_completed;
+
                                 // Send request again...
                                 l_t_client->limit_rate();
                                 l_t_client->create_request(*l_nconn, *l_reqlet);
                                 l_nconn->send_request(true);
-                                l_t_client->m_num_pending++;
+                                ++l_t_client->m_num_fetched;
                         }
                         // You complete me...
                         else
@@ -635,6 +634,7 @@ void *t_client::evr_loop_file_error_cb(void *a_data)
 //: ----------------------------------------------------------------------------
 void *t_client::evr_loop_file_timeout_cb(void *a_data)
 {
+        //NDBG_PRINT("%sTIMEOUT%s %p\n", ANSI_COLOR_FG_CYAN, ANSI_COLOR_OFF, a_data);
         if(!a_data)
         {
                 //NDBG_PRINT("a_data == NULL\n");
@@ -662,9 +662,8 @@ void *t_client::evr_loop_file_timeout_cb(void *a_data)
         }
 
         // Stats
-        l_t_client->m_num_fetched++;
-        l_reqlet->m_stat_agg.m_num_conn_completed++;
-        ++(l_reqlet->m_stat_agg.m_num_idle_killed);
+        ++l_t_client->m_num_fetched;
+        ++l_reqlet->m_stat_agg.m_num_idle_killed;
 
         // Cleanup
         T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 902, "Connection timed out");
@@ -710,10 +709,9 @@ void *t_client::t_run(void *a_nothing)
         // -------------------------------------------
         //NDBG_PRINT("starting main loop\n");
         while(!m_stopped &&
-              !is_done() &&
+              !is_pending_done() &&
               ((m_run_time_s == -1) || (m_run_time_s > (int32_t)(get_time_s() - m_start_time_s))))
         {
-
                 // -------------------------------------------
                 // Start Connections
                 // -------------------------------------------
@@ -730,8 +728,10 @@ void *t_client::t_run(void *a_nothing)
                 m_evr_loop->run();
 
         }
-
-        //NDBG_PRINT("%sFINISHING_CONNECTIONS%s -done: %d -- m_stopped: %d\n", ANSI_COLOR_BG_MAGENTA, ANSI_COLOR_OFF, l_hlx_client->done(), m_stopped);
+        //NDBG_PRINT("%sFINISHING_CONNECTIONS%s -done: %d -- m_stopped: %d m_num_fetched: %d + pending: %d/ m_num_fetches: %d\n",
+        //                ANSI_COLOR_BG_MAGENTA, ANSI_COLOR_OFF,
+        //                is_pending_done(), m_stopped,
+        //                (int)m_num_fetched, (int) m_num_pending, (int)m_num_fetches);
 
         // Still awaiting responses -wait...
         uint64_t l_cur_time = get_time_s();
@@ -748,11 +748,9 @@ void *t_client::t_run(void *a_nothing)
 
         }
         //NDBG_PRINT("%sDONE_CONNECTIONS%s\n", ANSI_COLOR_BG_YELLOW, ANSI_COLOR_OFF);
-
+        //NDBG_PRINT("waiting: m_num_pending: %d --time-left: %d\n", (int)m_num_pending, int(l_end_time - l_cur_time));
         m_stopped = true;
-
         return NULL;
-
 }
 
 //: ----------------------------------------------------------------------------
@@ -836,7 +834,7 @@ int32_t t_client::start_connections(void)
         //NDBG_PRINT("m_conn_free_list.size(): %Zu\n", m_conn_free_list.size());
         for (conn_id_list_t::iterator i_conn = m_conn_free_list.begin();
                (i_conn != m_conn_free_list.end()) &&
-               (!is_done()) &&
+               (!is_pending_done()) &&
                !m_stopped;
              )
         {
@@ -845,10 +843,10 @@ int32_t t_client::start_connections(void)
 
                 // Loop trying to get reqlet
                 l_reqlet = NULL;
-                while(((l_reqlet = try_get_resolved()) == NULL) && (!is_done()));
+                while(((l_reqlet = try_get_resolved()) == NULL) && (!is_pending_done()));
 
                 if((l_reqlet == NULL) &&
-                    is_done())
+                   is_pending_done())
                 {
                         // Bail out
                         return STATUS_OK;
@@ -888,7 +886,7 @@ int32_t t_client::start_connections(void)
                 l_nconn->set_data1(l_reqlet);
 
                 // Bump stats
-                ++(l_reqlet->m_stat_agg.m_num_conn_started);
+                ++l_reqlet->m_stat_agg.m_num_conn_started;
 
                 // Create request
                 if(!m_settings.m_connect_only)

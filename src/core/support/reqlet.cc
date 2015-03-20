@@ -597,14 +597,14 @@ void reqlet::set_response(uint16_t a_response_status, const char *a_response)
 
         if(m_response_status == 502)
         {
-                ++(m_stat_agg.m_num_idle_killed);
+                ++m_stat_agg.m_num_idle_killed;
         }
         if(m_response_status >= 500)
         {
-                ++(m_stat_agg.m_num_errors);
+                ++m_stat_agg.m_num_errors;
         }
 
-        ++(m_stat_agg.m_num_conn_completed);
+        ++m_stat_agg.m_num_conn_completed;
 }
 
 //: ----------------------------------------------------------------------------

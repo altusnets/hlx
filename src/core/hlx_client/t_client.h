@@ -168,7 +168,17 @@ public:
         uint32_t get_timeout_s(void) { return m_settings.m_timeout_s;};
         void get_stats_copy(tag_stat_map_t &ao_tag_stat_map);
         void set_end_fetches(int32_t a_num_fetches) { m_num_fetches = a_num_fetches;}
-        bool is_done(void) const {return (m_num_fetched == m_num_fetches);}
+        bool is_done(void) const
+        {
+                if(m_num_fetches != -1) return (m_num_fetched >= m_num_fetches);
+                else return false;
+        }
+        bool is_pending_done(void) const
+        {
+                if(m_num_fetches != -1) return ((m_num_fetched + m_num_pending) >= m_num_fetches);
+                else return false;
+        }
+
         int32_t append_summary(reqlet *a_reqlet);
         const reqlet_vector_t &get_reqlet_vector(void) {return m_reqlet_vector;};
 

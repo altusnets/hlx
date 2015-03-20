@@ -456,9 +456,9 @@ int main(int argc, char** argv)
         int32_t l_http_load_display = -1;
         int32_t l_http_data_port = -1;
         bool l_show_breakdown = false;
-        int l_max_threads = 1;
+        int l_max_threads = 4;
         // TODO Make default definitions
-        int l_start_parallel = 64;
+        int l_start_parallel = 128;
         int l_max_reqs_per_conn = 1;
         int l_end_fetches = -1;
         bool l_input_flag = false;
@@ -814,6 +814,7 @@ int main(int argc, char** argv)
                 case 'v':
                         l_settings.m_verbose = true;
                         l_hlx_client->set_verbose(true);
+                        l_hlx_client->set_save_response(true);
                         break;
 
                 // ---------------------------------------
@@ -890,8 +891,8 @@ int main(int argc, char** argv)
 
         if (l_end_fetches > 0 && l_start_parallel > l_end_fetches)
         {
-                fprintf(stdout, "Error, number of parallel requests must be less than the number of fetches.");
-                print_usage(stdout, -1);
+                l_start_parallel = l_end_fetches;
+                l_hlx_client->set_num_parallel(l_start_parallel);
         }
 
         // -------------------------------------------
@@ -937,7 +938,8 @@ int main(int argc, char** argv)
 
         // Run
         // Message
-        fprintf(stdout, "Running %d parallel connections with: %d reqs/conn, %d threads\n", l_start_parallel, l_max_reqs_per_conn, l_max_threads);
+        fprintf(stdout, "Running %d threads %d parallel connections per thread with %d reqests per connection\n",
+                l_max_threads, l_start_parallel, l_max_reqs_per_conn);
 
         int32_t l_run_status = 0;
         l_run_status = l_hlx_client->run();

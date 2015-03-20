@@ -153,7 +153,7 @@ public:
                 //NDBG_PRINT("CONN ka %d / num %ld / %ld \n", m_server_response_supports_keep_alives, m_num_reqs, m_num_reqs_per_conn);
                 if(m_server_response_supports_keep_alives &&
                       ((m_num_reqs_per_conn == -1) ||
-                       (m_num_reqs_per_conn >= m_num_reqs)))
+                       (m_num_reqs < m_num_reqs_per_conn)))
                 {
                         return true;
                 }
