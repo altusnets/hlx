@@ -5,4 +5,3 @@ TODO:
 4. Make perf-tools/tcmalloc optional
 5. Make hlx_server with evr and boot microhttpd
 6. Remove leveldb and use json file for address cache.
-7. Merge hlp with hlx_client.
