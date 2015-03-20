@@ -141,6 +141,8 @@ t_client::t_client(const settings_struct_t &a_settings,
         COPY_SETTINGS(m_num_end_fetches);
         COPY_SETTINGS(m_run_time_s);
         COPY_SETTINGS(m_connect_only);
+        COPY_SETTINGS(m_save_response);
+        COPY_SETTINGS(m_collect_stats);
         COPY_SETTINGS(m_num_reqs_per_conn);
         COPY_SETTINGS(m_sock_opt_recv_buf_size);
         COPY_SETTINGS(m_sock_opt_send_buf_size);

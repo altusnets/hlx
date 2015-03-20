@@ -1371,7 +1371,16 @@ void hlx_client::get_stats(total_stat_agg_t &ao_all_stats,
                 const reqlet_vector_t &l_reqlet_vector = (*i_client)->get_reqlet_vector();
                 for(reqlet_vector_t::const_iterator i_reqlet = l_reqlet_vector.begin(); i_reqlet != l_reqlet_vector.end(); ++i_reqlet)
                 {
-                        l_copy[(*i_reqlet)->get_label()] = (*i_reqlet)->m_stat_agg;
+                        std::string l_label = (*i_reqlet)->get_label();
+                        tag_stat_map_t::iterator i_copy = l_copy.find(l_label);
+                        if(i_copy != l_copy.end())
+                        {
+                                add_to_total_stat_agg(i_copy->second, (*i_reqlet)->m_stat_agg);
+                        }
+                        else
+                        {
+                                l_copy[(*i_reqlet)->get_label()] = (*i_reqlet)->m_stat_agg;
+                        }
                 }
         }
 

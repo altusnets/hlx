@@ -614,7 +614,6 @@ void reqlet::set_response(uint16_t a_response_status, const char *a_response)
 //: ----------------------------------------------------------------------------
 void add_stat_to_agg(total_stat_agg_t &ao_stat_agg, const req_stat_t &a_req_stat)
 {
-
         update_stat(ao_stat_agg.m_stat_us_connect, a_req_stat.m_tt_connect_us);
         update_stat(ao_stat_agg.m_stat_us_ssl_connect, a_req_stat.m_tt_ssl_connect_us);
         update_stat(ao_stat_agg.m_stat_us_first_response, a_req_stat.m_tt_first_read_us);
