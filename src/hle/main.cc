@@ -399,6 +399,9 @@ int main(int argc, char** argv)
         // Turn on wildcarding by default
         l_hlx_client->set_wildcarding(false);
         l_hlx_client->set_split_requests_by_thread(true);
+        l_hlx_client->set_collect_stats(false);
+        l_hlx_client->set_save_response(true);
+        l_hlx_client->set_use_ai_cache(true);
 
         // -------------------------------------------
         // Setup default headers before the user

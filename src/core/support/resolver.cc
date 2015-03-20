@@ -88,8 +88,6 @@ int32_t resolver::cached_resolve(std::string &a_host,
                 snprintf(l_port_str, 8, "%d", a_port);
                 l_cache_key = a_host + ":" + l_port_str;
 
-                //NDBG_PRINT("CACHE_KEY: %s\n", l_cache_key.c_str());
-
                 l_ldb_status = m_ai_db->Get(leveldb::ReadOptions(), l_cache_key, &l_ai_result);
                 // If we found it...
                 if(l_ldb_status.ok())

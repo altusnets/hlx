@@ -171,6 +171,8 @@ public:
         void set_num_reqs_per_conn(int32_t a_val);
         void set_rate(int32_t a_val);
         void set_request_mode(request_mode_t a_mode);
+        void set_save_response(bool a_val);
+        void set_collect_stats(bool a_val);
 
         // Socket options
         void set_sock_opt_no_delay(bool a_val);
@@ -201,14 +203,6 @@ public:
                                        output_type_t a_output_type,
                                        int a_part_map);
 
-        // Support
-        int32_t append_summary(reqlet *a_reqlet);
-        void up_done(bool a_error);
-        void up_get(void);
-        bool done(void);
-        reqlet *try_get_resolved(void);
-        void up_resolved(bool a_error);
-
         // ---------------------------------------
         // Legacy Display/status
         // ---------------------------------------
@@ -238,13 +232,6 @@ private:
         // -------------------------------------------------
         HLX_CLIENT_DISALLOW_COPY_AND_ASSIGN(hlx_client)
 
-        // reqlets
-        reqlet *get_reqlet(void);
-        int32_t add_reqlet(reqlet *a_reqlet);
-        uint32_t get_num_reqlets(void);
-        uint32_t get_num_get(void);
-        bool empty(void);
-
         // -------------------------------------------------
         // Private members
         // -------------------------------------------------
@@ -266,6 +253,8 @@ private:
         uint32_t m_timeout_s;
         bool m_connect_only;
         bool m_show_summary;
+        bool m_save_response;
+        bool m_collect_stats;
 
         int32_t m_rate;
         int32_t m_num_end_fetches;
@@ -300,35 +289,11 @@ private:
 
         // Reqlets
         reqlet_vector_t m_reqlet_vector;
-        pthread_mutex_t m_mutex;
-        uint32_t m_num_reqlets;
-        uint32_t m_num_get;
-        uint32_t m_num_done;
-        uint32_t m_num_resolved;
-        uint32_t m_num_error;
-
-        // -----------------------------
-        // Summary info
-        // -----------------------------
-        // Connectivity
-        uint32_t m_summary_success;
-        uint32_t m_summary_error_addr;
-        uint32_t m_summary_error_conn;
-        uint32_t m_summary_error_unknown;
-
-        // SSL info
-        uint32_t m_summary_ssl_error_self_signed;
-        uint32_t m_summary_ssl_error_expired;
-        uint32_t m_summary_ssl_error_other;
-
-        summary_map_t m_summary_ssl_protocols;
-        summary_map_t m_summary_ssl_ciphers;
 
         // -----------------------------
         // State
         // -----------------------------
         bool m_is_initd;
-
 
         // -------------------------------------------------
         // Class members
