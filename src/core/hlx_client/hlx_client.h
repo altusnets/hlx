@@ -184,6 +184,9 @@ public:
         int set_header(const std::string &a_key, const std::string &a_val);
         void clear_headers(void);
 
+        // Verb
+        void set_verb(const std::string &a_verb);
+
         // SSL
         void set_ssl_cipher_list(const std::string &a_cipher_list);
         void set_ssl_ca_path(const std::string &a_ssl_ca_path);
@@ -252,6 +255,8 @@ private:
         bool m_wildcarding;
 
         header_map_t m_header_map;
+        std::string m_verb;
+
         bool m_use_ai_cache;
         std::string m_ai_cache;
         int32_t m_num_parallel;

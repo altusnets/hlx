@@ -145,6 +145,7 @@ int hlx_client::run(void)
         l_settings.m_show_summary = m_show_summary;
         l_settings.m_url = m_url;
         l_settings.m_header_map = m_header_map;
+        l_settings.m_verb = m_verb;
         l_settings.m_evr_loop_type = (evr_loop_type_t)m_evr_loop_type;
         l_settings.m_num_parallel = m_num_parallel;
         l_settings.m_num_threads = m_num_threads;
@@ -809,6 +810,15 @@ void hlx_client::clear_headers(void)
         m_header_map.clear();
 }
 
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void hlx_client::set_verb(const std::string &a_verb)
+{
+        m_verb = a_verb;
+}
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -904,16 +914,23 @@ hlx_client::hlx_client(void):
         m_url(),
         m_url_file(),
         m_wildcarding(false),
-
         m_header_map(),
+
+        // TODO Make define
+        m_verb("GET"),
+
         m_use_ai_cache(true),
         m_ai_cache(),
+
         // TODO Make define
         m_num_parallel(128),
+
         // TODO Make define
         m_num_threads(4),
+
         // TODO Make define
         m_timeout_s(10),
+
         m_connect_only(false),
         m_show_summary(false),
         m_save_response(false),
@@ -923,6 +940,8 @@ hlx_client::hlx_client(void):
         m_num_end_fetches(-1),
         m_num_reqs_per_conn(1),
         m_run_time_s(-1),
+
+        // TODO Make define
         m_request_mode(REQUEST_MODE_ROUND_ROBIN),
         m_split_requests_by_thread(true),
 
@@ -947,6 +966,8 @@ hlx_client::hlx_client(void):
 
         // t_client
         m_t_client_list(),
+
+        // TODO Make define
         m_evr_loop_type(EVR_LOOP_EPOLL),
 
         m_reqlet_vector(),

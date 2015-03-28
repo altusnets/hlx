@@ -73,6 +73,7 @@ typedef struct settings_struct
         // request options
         std::string m_url;
         header_map_t m_header_map;
+        std::string m_verb;
 
         // run options
         t_client_list_t m_t_client_list;
@@ -114,6 +115,7 @@ typedef struct settings_struct
                 m_show_summary(false),
                 m_url(),
                 m_header_map(),
+                m_verb("GET"),
                 m_t_client_list(),
                 m_evr_loop_type(EVR_LOOP_EPOLL),
                 m_num_parallel(64),
