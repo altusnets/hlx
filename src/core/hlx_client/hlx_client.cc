@@ -136,17 +136,6 @@ int hlx_client::run(void)
         }
 
         // -------------------------------------------
-        // Determine -if can share request body
-        // -optimization
-        // TODO
-        // -------------------------------------------
-        bool l_can_share_request = true;
-        if(l_can_share_request)
-        {
-                // Create the request
-        }
-
-        // -------------------------------------------
         // Bury the config into a settings struct
         // -------------------------------------------
         settings_struct_t l_settings;
@@ -167,8 +156,6 @@ int hlx_client::run(void)
         l_settings.m_connect_only = m_connect_only;
         l_settings.m_save_response = m_save_response;
         l_settings.m_collect_stats = m_collect_stats;
-        l_settings.m_req_buf = m_req_buf;
-        l_settings.m_req_buf_len = m_req_buf_len;
         l_settings.m_num_reqs_per_conn = m_num_reqs_per_conn;
         l_settings.m_sock_opt_recv_buf_size = m_sock_opt_recv_buf_size;
         l_settings.m_sock_opt_send_buf_size = m_sock_opt_send_buf_size;
@@ -394,8 +381,6 @@ void hlx_client::set_wildcarding(bool a_val)
 //: ----------------------------------------------------------------------------
 int hlx_client::set_host_list(host_list_t &a_host_list)
 {
-        // TODO Destroy m_reqlet_vector if reused
-
         // Create the reqlet list
         uint32_t l_reqlet_num = 0;
         for(host_list_t::const_iterator i_host = a_host_list.begin();
@@ -950,9 +935,6 @@ hlx_client::hlx_client(void):
         m_show_summary(false),
         m_save_response(false),
         m_collect_stats(false),
-
-        m_req_buf(NULL),
-        m_req_buf_len(0),
 
         m_rate(-1),
         m_num_end_fetches(-1),

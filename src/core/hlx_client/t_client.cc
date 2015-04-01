@@ -144,8 +144,6 @@ t_client::t_client(const settings_struct_t &a_settings,
         COPY_SETTINGS(m_connect_only);
         COPY_SETTINGS(m_save_response);
         COPY_SETTINGS(m_collect_stats);
-        COPY_SETTINGS(m_req_buf);
-        COPY_SETTINGS(m_req_buf_len);
         COPY_SETTINGS(m_num_reqs_per_conn);
         COPY_SETTINGS(m_sock_opt_recv_buf_size);
         COPY_SETTINGS(m_sock_opt_send_buf_size);
@@ -939,15 +937,6 @@ int32_t t_client::start_connections(void)
 int32_t t_client::create_request(nconn &ao_conn,
                                  reqlet &a_reqlet)
 {
-
-        if(m_settings.m_req_buf)
-        {
-                SET_NCONN_OPT(ao_conn, nconn_tcp::OPT_TCP_REQ_BUF, m_settings.m_req_buf, m_settings.m_req_buf_len);
-                return STATUS_OK;
-        }
-
-        // TODO
-#if 0
         // Get client
         char *l_req_buf = NULL;
         uint32_t l_req_buf_len = 0;
@@ -1007,10 +996,7 @@ int32_t t_client::create_request(nconn &ao_conn,
         l_req_buf_len += snprintf(l_req_buf + l_req_buf_len, l_max_buf_len - l_req_buf_len, "\r\n");
 
         // Set len
-        SET_NCONN_OPT(ao_conn, nconn_tcp::OPT_TCP_REQ_BUF, l_req_buf, l_req_buf_len);
-#endif
-
-
+        SET_NCONN_OPT(ao_conn, nconn_tcp::OPT_TCP_REQ_BUF_LEN, NULL, l_req_buf_len);
         return STATUS_OK;
 }
 

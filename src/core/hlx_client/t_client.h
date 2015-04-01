@@ -89,8 +89,6 @@ typedef struct settings_struct
         int32_t m_num_reqs_per_conn;
         bool m_save_response;
         bool m_collect_stats;
-        const char *m_req_buf;
-        uint32_t m_req_buf_len;
 
         // tcp options
         uint32_t m_sock_opt_recv_buf_size;
@@ -106,7 +104,6 @@ typedef struct settings_struct
         bool m_ssl_sni;
         std::string m_ssl_ca_file;
         std::string m_ssl_ca_path;
-
 
         // ---------------------------------
         // Defaults...
@@ -132,8 +129,6 @@ typedef struct settings_struct
                 m_num_reqs_per_conn(-1),
                 m_save_response(false),
                 m_collect_stats(false),
-                m_req_buf(NULL),
-                m_req_buf_len(0),
                 m_sock_opt_recv_buf_size(0),
                 m_sock_opt_send_buf_size(0),
                 m_sock_opt_no_delay(false),

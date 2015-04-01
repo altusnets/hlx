@@ -563,9 +563,8 @@ int32_t nconn_tcp::set_opt(uint32_t a_opt, const void *a_buf, uint32_t a_len)
 {
         switch(a_opt)
         {
-        case OPT_TCP_REQ_BUF:
+        case OPT_TCP_REQ_BUF_LEN:
         {
-                m_req_buf = (char *)a_buf;
                 m_req_buf_len = a_len;
                 break;
         }

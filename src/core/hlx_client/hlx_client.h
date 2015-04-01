@@ -266,8 +266,6 @@ private:
         bool m_show_summary;
         bool m_save_response;
         bool m_collect_stats;
-        char *m_req_buf;
-        uint32_t m_req_buf_len;
 
         int32_t m_rate;
         int32_t m_num_end_fetches;
