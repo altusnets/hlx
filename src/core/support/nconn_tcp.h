@@ -128,7 +128,6 @@ public:
         // -------------------------------------------------
         // Public static methods
         // -------------------------------------------------
-        static const uint32_t m_max_req_buf = 2048;
         static const uint32_t m_max_read_buf = 16*1024;
 
         // -------------------------------------------------
@@ -182,7 +181,7 @@ protected:
         bool m_sock_opt_no_delay;
         uint32_t m_timeout_s;
 
-        char m_req_buf[m_max_req_buf];
+        char *m_req_buf;
         uint32_t m_req_buf_len;
         char m_read_buf[m_max_read_buf];
         uint32_t m_read_buf_idx;
