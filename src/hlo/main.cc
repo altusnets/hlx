@@ -295,6 +295,7 @@ void print_usage(FILE* a_stream, int a_exit_code)
         fprintf(a_stream, "Input Options:\n");
         fprintf(a_stream, "  -u, --url_file     URL file.\n");
         fprintf(a_stream, "  -w, --no_wildcards Don't wildcard the url.\n");
+        fprintf(a_stream, "  -d, --data         HTTP body data -supports bodies up to 8k.\n");
 
         fprintf(a_stream, "  \n");
         fprintf(a_stream, "Settings:\n");
@@ -396,6 +397,7 @@ int main(int argc, char** argv)
                 { "version",      0, 0, 'r' },
                 { "url_file",     1, 0, 'u' },
                 { "no_wildcards", 0, 0, 'w' },
+                { "data",         1, 0, 'd' },
                 { "cipher",       1, 0, 'y' },
                 { "parallel",     1, 0, 'p' },
                 { "fetches",      1, 0, 'f' },
@@ -455,7 +457,7 @@ int main(int argc, char** argv)
 
         }
 
-        while ((l_opt = getopt_long_only(argc, argv, "hrku:wy:p:f:N:t:H:X:A:M:l:R:S:DT:vcqY:BP:G:", l_long_options, &l_option_index)) != -1)
+        while ((l_opt = getopt_long_only(argc, argv, "hrku:wd:y:p:f:N:t:H:X:A:M:l:R:S:DT:vcqY:BP:G:", l_long_options, &l_option_index)) != -1)
         {
 
                 if (optarg)
@@ -505,6 +507,22 @@ int main(int argc, char** argv)
                 }
 
                 // ---------------------------------------
+                // Data
+                // ---------------------------------------
+                case 'd':
+                {
+                        int32_t l_status;
+                        l_status = l_hlx_client->set_data(l_argument.c_str(), l_argument.length());
+                        if(l_status != HLX_CLIENT_STATUS_OK)
+                        {
+                                printf("Error setting HTTP body data with: %s\n", l_argument.c_str());
+                                //print_usage(stdout, -1);
+                                return -1;
+                        }
+                        break;
+                }
+
+                // ---------------------------------------
                 // Google Profiler Output File
                 // ---------------------------------------
                 case 'G':
@@ -540,7 +558,8 @@ int main(int argc, char** argv)
                         if (l_start_parallel < 1)
                         {
                                 printf("parallel must be at least 1\n");
-                                print_usage(stdout, -1);
+                                //print_usage(stdout, -1);
+                                return -1;
                         }
                         l_hlx_client->set_num_parallel(l_start_parallel);
                         break;
@@ -557,7 +576,8 @@ int main(int argc, char** argv)
                         if (l_end_fetches < 1)
                         {
                                 printf("fetches must be at least 1\n");
-                                print_usage(stdout, -1);
+                                //print_usage(stdout, -1);
+                                return -1;
                         }
                         l_hlx_client->set_end_fetches(l_end_fetches);
 
@@ -600,7 +620,8 @@ int main(int argc, char** argv)
                         if (l_max_threads < 1)
                         {
                                 printf("num-threads must be at least 1\n");
-                                print_usage(stdout, -1);
+                                //print_usage(stdout, -1);
+                                return -1;
                         }
 
                         l_hlx_client->set_num_threads(l_max_threads);
@@ -616,7 +637,8 @@ int main(int argc, char** argv)
                         if(l_status != HLX_CLIENT_STATUS_OK)
                         {
                                 printf("Error header string[%s] is malformed\n", l_argument.c_str());
-                                print_usage(stdout, -1);
+                                //print_usage(stdout, -1);
+                                return -1;
                         }
                         break;
                 }
@@ -628,7 +650,8 @@ int main(int argc, char** argv)
                         if(l_argument.length() > 64)
                         {
                                 printf("Error verb string: %s too large try < 64 chars\n", l_argument.c_str());
-                                print_usage(stdout, -1);
+                                //print_usage(stdout, -1);
+                                return -1;
                         }
                         l_hlx_client->set_verb(l_argument);
                         break;
@@ -642,7 +665,8 @@ int main(int argc, char** argv)
                         if (l_rate < 1)
                         {
                                 printf("Error: rate must be at least 1\n");
-                                print_usage(stdout, -1);
+                                //print_usage(stdout, -1);
+                                return -1;
                         }
                         l_hlx_client->set_rate(l_rate);
 
@@ -670,7 +694,8 @@ int main(int argc, char** argv)
                         else
                         {
                                 printf("Error: Mode must be [roundrobin|sequential|random]\n");
-                                print_usage(stdout, -1);
+                                //print_usage(stdout, -1);
+                                return -1;
                         }
                         l_hlx_client->set_request_mode(l_mode);
 
@@ -685,7 +710,8 @@ int main(int argc, char** argv)
                         if (l_run_time_s < 1)
                         {
                                 printf("Error: seconds must be at least 1\n");
-                                print_usage(stdout, -1);
+                                //print_usage(stdout, -1);
+                                return -1;
                         }
                         l_hlx_client->set_run_time_s(l_run_time_s);
 
@@ -736,7 +762,8 @@ int main(int argc, char** argv)
                         if (l_timeout < 1)
                         {
                                 printf("timeout must be > 0\n");
-                                print_usage(stdout, -1);
+                                //print_usage(stdout, -1);
+                                return -1;
                         }
                         l_hlx_client->set_timeout_s(l_timeout);
 
@@ -747,73 +774,90 @@ int main(int argc, char** argv)
                 // verbose
                 // ---------------------------------------
                 case 'v':
+                {
                         l_settings.m_verbose = true;
                         l_hlx_client->set_verbose(true);
                         l_hlx_client->set_save_response(true);
                         break;
+                }
 
                 // ---------------------------------------
                 // color
                 // ---------------------------------------
                 case 'c':
+                {
                         l_settings.m_color = true;
                         l_hlx_client->set_color(true);
                         break;
+                }
 
                 // ---------------------------------------
                 // quiet
                 // ---------------------------------------
                 case 'q':
+                {
                         l_settings.m_quiet = true;
                         l_hlx_client->set_quiet(true);
                         break;
-
+                }
 
                 // ---------------------------------------
                 // http_load
                 // ---------------------------------------
                 case 'Y':
+                {
                         l_http_load_display = atoi(optarg);
                         if ((l_http_load_display < 0) || (l_http_load_display > 3))
                         {
                                 printf("Error: http load display mode must be between 0--3\n");
-                                print_usage(stdout, -1);
+                                //print_usage(stdout, -1);
+                                return -1;
                         }
                         break;
+                }
 
                 // ---------------------------------------
                 // show breakdown
                 // ---------------------------------------
                 case 'B':
+                {
                         l_show_breakdown = true;
                         break;
+                }
 
                 // ---------------------------------------
                 // Data Port
                 // ---------------------------------------
                 case 'P':
+                {
                         l_http_data_port = (uint16_t)atoi(optarg);
                         if (l_http_data_port < 1)
                         {
                                 printf("Error: HTTP Data port must be > 0\n");
-                                print_usage(stdout, -1);
+                                //print_usage(stdout, -1);
+                                return -1;
                         }
                         break;
+                }
 
                 // What???
                 case '?':
+                {
                         // Required argument was missing
                         // '?' is provided when the 3rd arg to getopt_long does not begin with a ':', and is preceeded
                         // by an automatic error message.
                         fprintf(stdout, "  Exiting.\n");
                         print_usage(stdout, -1);
                         break;
+                }
 
                 // Huh???
                 default:
+                {
                         fprintf(stdout, "Unrecognized option.\n");
                         print_usage(stdout, -1);
                         break;
+                }
                 }
         }
 

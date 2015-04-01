@@ -146,6 +146,9 @@ public:
         void set_url(const std::string &a_url);
         void set_wildcarding(bool a_val);
 
+        // data
+        int set_data(const char *a_data, uint32_t a_len);
+
         // Host list
         int set_host_list(host_list_t &a_host_list);
         int set_server_list(server_list_t &a_server_list);
@@ -253,6 +256,8 @@ private:
         std::string m_url;
         std::string m_url_file;
         bool m_wildcarding;
+        char *m_req_body;
+        uint32_t m_req_body_len;
 
         header_map_t m_header_map;
         std::string m_verb;
