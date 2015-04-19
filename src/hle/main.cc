@@ -325,8 +325,8 @@ void print_usage(FILE* a_stream, int a_exit_code)
         fprintf(a_stream, "  \n");
 
         fprintf(a_stream, "URL Options -or without parameter\n");
-        fprintf(a_stream, "  -u, --url            URL -REQUIRED.\n");
-        fprintf(a_stream, "  -d, --data         HTTP body data -supports bodies up to 8k.\n");
+        fprintf(a_stream, "  -u, --url            URL -REQUIRED (unless running cli: see --cli option).\n");
+        fprintf(a_stream, "  -d, --data           HTTP body data -supports bodies up to 8k.\n");
         fprintf(a_stream, "  \n");
 
         fprintf(a_stream, "Hostname Input Options -also STDIN:\n");
@@ -355,6 +355,9 @@ void print_usage(FILE* a_stream, int a_exit_code)
         fprintf(a_stream, "  -F, --ssl_ca_file    SSL CA File.\n");
         fprintf(a_stream, "  -L, --ssl_ca_path    SSL CA Path.\n");
         fprintf(a_stream, "  \n");
+
+        fprintf(a_stream, "Command Line Client:\n");
+        fprintf(a_stream, "  -I, --cli            Start interactive command line -URL not required.\n");
 
         fprintf(a_stream, "Print Options:\n");
         fprintf(a_stream, "  -v, --verbose        Verbose logging\n");
@@ -451,6 +454,7 @@ int main(int argc, char** argv)
                 { "ssl_sni",        0, 0, 'N' },
                 { "ssl_ca_file",    1, 0, 'F' },
                 { "ssl_ca_path",    1, 0, 'L' },
+                { "cli",            0, 0, 'I' },
                 { "verbose",        0, 0, 'v' },
                 { "color",          0, 0, 'c' },
                 { "quiet",          0, 0, 'q' },
@@ -473,6 +477,7 @@ int main(int argc, char** argv)
         std::string l_url;
         std::string l_ai_cache;
         std::string l_output_file = "";
+        bool l_cli = false;
 
         // Defaults
         ns_hlx::output_type_t l_output_mode = ns_hlx::OUTPUT_JSON;
@@ -514,7 +519,7 @@ int main(int argc, char** argv)
         // -------------------------------------------------
         // Args...
         // -------------------------------------------------
-        char l_short_arg_list[] = "hvu:d:f:J:x:y:O:VNF:L:p:t:H:X:T:R:S:DA:Crcqsmo:ljPG:";
+        char l_short_arg_list[] = "hvu:d:f:J:x:y:O:VNF:L:Ip:t:H:X:T:R:S:DA:Crcqsmo:ljPG:";
         while ((l_opt = getopt_long_only(argc, argv, l_short_arg_list, l_long_options, &l_option_index)) != -1)
         {
 
@@ -661,6 +666,16 @@ int main(int argc, char** argv)
                         l_hlx_client->set_ssl_ca_path(l_argument);
                         break;
                 }
+                // ---------------------------------------
+                // cli
+                // ---------------------------------------
+                case 'I':
+                {
+                        l_cli = true;
+                        l_hlx_client->set_header("Connection","keep-alive");
+                        break;
+                }
+
                 // ---------------------------------------
                 // parallel
                 // ---------------------------------------
@@ -888,13 +903,23 @@ int main(int argc, char** argv)
         }
 
         // Check for required url argument
-        if(l_url.empty())
+        if(l_url.empty() && !l_cli)
         {
                 fprintf(stdout, "No URL specified.\n");
                 print_usage(stdout, -1);
         }
         // else set url
-        l_hlx_client->set_url(l_url);
+        if(!l_url.empty())
+        {
+                int l_status;
+                l_status = l_hlx_client->set_url(l_url);
+                if(HLX_CLIENT_STATUS_OK != l_status)
+                {
+                        printf("Error: performing set_url with url: %s.\n", l_url.c_str());
+                        return -1;
+                }
+        }
+
 
         ns_hlx::host_list_t l_host_list;
         // -------------------------------------------------
@@ -1096,12 +1121,6 @@ int main(int argc, char** argv)
         // Initializer hlx_client
         int l_status = 0;
 
-        // Start Profiler
-        if (!l_gprof_file.empty())
-        {
-                ProfilerStart(l_gprof_file.c_str());
-        }
-
         // Set host list
         l_status = l_hlx_client->set_host_list(l_host_list);
         if(HLX_CLIENT_STATUS_OK != l_status)
@@ -1110,12 +1129,25 @@ int main(int argc, char** argv)
                 return -1;
         }
 
-        // Run
-        l_status = l_hlx_client->run();
-        if(HLX_CLIENT_STATUS_OK != l_status)
+        // Start Profiler
+        if (!l_gprof_file.empty())
         {
-                printf("Error: performing run");
-                return -1;
+                ProfilerStart(l_gprof_file.c_str());
+        }
+
+        // Run
+        if(!l_cli)
+        {
+                l_status = l_hlx_client->run();
+                if(HLX_CLIENT_STATUS_OK != l_status)
+                {
+                        printf("Error: performing run");
+                        return -1;
+                }
+
+                printf("Running again.\n");
+                l_status = l_hlx_client->run();
+
         }
 
         //uint64_t l_start_time_ms = get_time_ms();
@@ -1131,12 +1163,16 @@ int main(int argc, char** argv)
         }
 
         // Wait for completion
-        l_hlx_client->wait_till_stopped();
-
-        // One more status for the lovers
-        if(l_settings.m_show_stats)
+        // Run
+        if(!l_cli)
         {
-                l_hlx_client->display_status_line(l_settings.m_color);
+                l_hlx_client->wait_till_stopped();
+
+                // One more status for the lovers
+                if(l_settings.m_show_stats)
+                {
+                        l_hlx_client->display_status_line(l_settings.m_color);
+                }
         }
 
         if (!l_gprof_file.empty())

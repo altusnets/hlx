@@ -145,7 +145,7 @@ public:
         void set_color(bool a_val);
 
         // url
-        void set_url(const std::string &a_url);
+        int set_url(const std::string &a_url);
         void set_wildcarding(bool a_val);
 
         // data
@@ -247,6 +247,7 @@ private:
         std::string dump_all_responses_json(int a_part_map);
 
         int init(void);
+        int init_client_list(void);
 
         // -------------------------------------------------
         // Private members

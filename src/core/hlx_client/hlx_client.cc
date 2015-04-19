@@ -87,18 +87,8 @@ namespace ns_hlx {
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int hlx_client::run(void)
+int hlx_client::init_client_list(void)
 {
-        int l_status = 0;
-        if(!m_is_initd)
-        {
-                l_status = init();
-                if(HLX_CLIENT_STATUS_OK != l_status)
-                {
-                        return HLX_CLIENT_STATUS_ERROR;
-                }
-        }
-        // at this point m_resolver is a resolver instance
 
         // -------------------------------------------
         // Bury the config into a settings struct
@@ -211,6 +201,37 @@ int hlx_client::run(void)
                 m_reqlet_vector.clear();
         }
 
+        return STATUS_OK;
+}
+
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int hlx_client::run(void)
+{
+        int l_status = 0;
+        if(!m_is_initd)
+        {
+                l_status = init();
+                if(HLX_CLIENT_STATUS_OK != l_status)
+                {
+                        return HLX_CLIENT_STATUS_ERROR;
+                }
+        }
+        // at this point m_resolver is a resolver instance
+
+        if(m_t_client_list.empty())
+        {
+                l_status = init_client_list();
+                if(STATUS_OK != l_status)
+                {
+                        return HLX_CLIENT_STATUS_ERROR;
+                }
+        }
+
         set_start_time_ms(get_time_ms());
 
         // -------------------------------------------
@@ -220,10 +241,6 @@ int hlx_client::run(void)
                         i_t_client != m_t_client_list.end();
                         ++i_t_client)
         {
-                //if(a_settings.m_verbose)
-                //{
-                //        NDBG_PRINT("Running...\n");
-                //}
                 (*i_t_client)->run();
         }
 
@@ -327,9 +344,38 @@ void hlx_client::set_color(bool a_val)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void hlx_client::set_url(const std::string &a_url)
+int hlx_client::set_url(const std::string &a_url)
 {
         m_url = a_url;
+
+        // If reqlets defined set path
+        parsed_url l_parsed_url;
+        int32_t l_status;
+        l_status = l_parsed_url.parse(a_url);
+        if(l_status != STATUS_OK)
+        {
+                //NDBG_PRINT("Error parsing url: %s\n", a_url.c_str());
+                return HLX_CLIENT_STATUS_ERROR;
+        }
+
+        for(size_t i_reqlet = 0;
+            i_reqlet < m_reqlet_vector.size();
+            ++i_reqlet)
+        {
+                reqlet *i_reqlet_ptr = m_reqlet_vector[i_reqlet];
+                if(i_reqlet_ptr)
+                {
+                        reqlet *l_reqlet = new reqlet(*i_reqlet_ptr);
+                        l_reqlet->init_with_url(a_url, m_wildcarding);
+                        l_reqlet->set_host(i_reqlet_ptr->m_url.m_host);
+
+                        delete i_reqlet_ptr;
+                        m_reqlet_vector[i_reqlet] = l_reqlet;
+                }
+        }
+
+        return HLX_CLIENT_STATUS_OK;
+
 }
 
 //: ----------------------------------------------------------------------------
