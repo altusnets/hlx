@@ -108,7 +108,6 @@ t_client::t_client(const settings_struct_t &a_settings,
         m_num_fetches(-1),
         m_num_fetched(0),
         m_num_pending(0),
-        m_run_time_s(-1),
         m_start_time_s(0),
         m_evr_loop(NULL),
         m_rate_delta_us(0),
@@ -367,9 +366,11 @@ reqlet *t_client::get_reqlet(void)
 {
         reqlet *l_reqlet = NULL;
 
-        //NDBG_PRINT("%sREQLST%s[%lu]: .\n", ANSI_COLOR_FG_CYAN, ANSI_COLOR_OFF, m_reqlet_list.size());
-        //NDBG_PRINT("m_rate_limit = %d m_rate_delta_us = %lu\n", m_rate_limit, m_rate_delta_us);
-        //NDBG_PRINT("m_reqlet_avail_list.size(): %d\n", (int)m_reqlet_avail_list.size());
+        //NDBG_PRINT("%sREQLST%s[%lu]: MODE: %d\n", ANSI_COLOR_FG_CYAN, ANSI_COLOR_OFF, m_reqlet_vector.size(), m_settings.m_request_mode);
+        //NDBG_PRINT("m_rate:                     %d\n",  m_settings.m_rate);
+        //NDBG_PRINT("m_rate_delta_us:            %lu\n", m_rate_delta_us);
+        //NDBG_PRINT("m_reqlet_vector_idx:        %u\n",  m_reqlet_vector_idx);
+        //NDBG_PRINT("m_reqlet_avail_list.size(): %d\n",  (int)m_reqlet_vector.size());
 
         if(0 == m_reqlet_vector.size())
         {
@@ -383,8 +384,13 @@ reqlet *t_client::get_reqlet(void)
         {
         case REQUEST_MODE_ROUND_ROBIN:
         {
-                uint32_t l_next_index = ((m_reqlet_vector_idx + 1) >= m_reqlet_vector.size()) ? 0 : m_reqlet_vector_idx + 1;
-                //NDBG_PRINT("m_last_reqlet_index: %d\n", m_last_reqlet_index);
+                uint32_t l_next_index = 0;
+                l_next_index = m_reqlet_vector_idx + 1;
+                if(l_next_index >= m_reqlet_vector.size())
+                {
+                        l_next_index = 0;
+                }
+                //NDBG_PRINT("m_next:                     %u\n", l_next_index);
                 m_reqlet_vector_idx = l_next_index;
                 l_reqlet = m_reqlet_vector[m_reqlet_vector_idx];
                 break;
@@ -415,6 +421,7 @@ reqlet *t_client::get_reqlet(void)
                 uint32_t l_next_index = ((m_reqlet_vector_idx + 1) >= m_reqlet_vector.size()) ? 0 : m_reqlet_vector_idx + 1;
                 m_reqlet_vector_idx = l_next_index;
                 l_reqlet = m_reqlet_vector[m_reqlet_vector_idx];
+                break;
         }
         }
 
@@ -426,7 +433,9 @@ reqlet *t_client::get_reqlet(void)
 
         // TODO UPGET LOCALLY
         ++m_num_get;
-        ++m_reqlet_vector_idx;
+
+        //NDBG_PRINT("m_reqlet_vector_idx:        %u\n",  m_reqlet_vector_idx);
+        //NDBG_PRINT("host:                       %s\n", l_reqlet->m_url.m_host.c_str());
 
         return l_reqlet;
 }
@@ -722,10 +731,10 @@ void *t_client::t_run(void *a_nothing)
         // -------------------------------------------
         // Main loop.
         // -------------------------------------------
-        //NDBG_PRINT("starting main loop\n");
+        //NDBG_PRINT("starting main loop: run_time_s: %d\n", m_settings.m_run_time_s);
         while(!m_stopped &&
               !is_pending_done() &&
-              ((m_run_time_s == -1) || (m_run_time_s > (int32_t)(get_time_s() - m_start_time_s))))
+              ((m_settings.m_run_time_s == -1) || (m_settings.m_run_time_s > (int32_t)(get_time_s() - m_start_time_s))))
         {
                 // -------------------------------------------
                 // Start Connections
@@ -751,7 +760,10 @@ void *t_client::t_run(void *a_nothing)
         // Still awaiting responses -wait...
         uint64_t l_cur_time = get_time_s();
         uint64_t l_end_time = l_cur_time + m_settings.m_timeout_s;
-        while(!m_stopped && (m_num_pending > 0) && (l_cur_time < l_end_time))
+        while(!m_stopped &&
+              (m_num_pending > 0) &&
+              (l_cur_time < l_end_time) &&
+              ((m_settings.m_run_time_s == -1) || (m_settings.m_run_time_s > (int32_t)(get_time_s() - m_start_time_s))))
         {
                 // Run loop
                 //NDBG_PRINT("waiting: m_num_pending: %d --time-left: %d\n", (int)m_num_pending, int(l_end_time - l_cur_time));
@@ -855,10 +867,16 @@ int32_t t_client::start_connections(void)
         {
 
                 //NDBG_PRINT("STARTING i_conn: %u\n", *i_conn);
+                if( (m_settings.m_run_time_s != -1) && (m_settings.m_run_time_s < static_cast<int32_t>(get_time_s() - m_start_time_s)) )
+                    return STATUS_OK;
 
                 // Loop trying to get reqlet
                 l_reqlet = NULL;
-                while(((l_reqlet = try_get_resolved()) == NULL) && (!is_pending_done()));
+                while(((l_reqlet = try_get_resolved()) == NULL) && (!is_pending_done())) {
+                    // checking the current time
+                    if( (m_settings.m_run_time_s != -1) && (m_settings.m_run_time_s < static_cast<int32_t>(get_time_s() - m_start_time_s)) )
+                        return STATUS_OK;
+                }
 
                 if((l_reqlet == NULL) &&
                    is_pending_done())
