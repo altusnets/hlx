@@ -207,6 +207,8 @@ int command_exec(settings_struct_t &a_settings)
                 return -1;
         }
 
+        g_test_finished = false;
+
         // ---------------------------------------
         //   Loop forever until user quits
         // ---------------------------------------
@@ -286,6 +288,14 @@ int command_exec(settings_struct_t &a_settings)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+void show_help(void)
+{
+        printf(" hle commands: \n");
+        printf("  h    Help or ?\n");
+        printf("  r    Run\n");
+        printf("  q    Quit\n");
+}
+
 #define MAX_CMD_SIZE 64
 int command_exec_cli(settings_struct_t &a_settings)
 {
@@ -335,7 +345,6 @@ int command_exec_cli(settings_struct_t &a_settings)
 
                 switch (l_cmd[0])
                 {
-
                 // -------------------------------------------
                 // Quit
                 // -only works when not reading from stdin
@@ -345,7 +354,6 @@ int command_exec_cli(settings_struct_t &a_settings)
                         l_done = true;
                         break;
                 }
-
                 // -------------------------------------------
                 // run
                 // -------------------------------------------
@@ -357,6 +365,16 @@ int command_exec_cli(settings_struct_t &a_settings)
                         {
                                 return -1;
                         }
+                        break;
+                }
+                // -------------------------------------------
+                // Help
+                // -------------------------------------------
+                case 'h':
+                case '?':
+                {
+                        show_help();
+                        break;
                 }
 
                 // -------------------------------------------

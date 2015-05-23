@@ -191,6 +191,34 @@ t_client::t_client(const settings_struct_t &a_settings,
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+void t_client::reset(void)
+{
+        m_num_get = 0;
+        m_num_done = 0;
+        m_num_resolved = 0;
+        m_num_error = 0;
+        m_summary_success = 0;
+        m_summary_error_addr = 0;
+        m_summary_error_conn = 0;
+        m_summary_error_unknown = 0;
+        m_summary_ssl_error_self_signed = 0;
+        m_summary_ssl_error_expired = 0;
+        m_summary_ssl_error_other = 0;
+        m_summary_ssl_protocols.clear();
+        m_summary_ssl_ciphers.clear();
+        m_num_fetched = 0;
+        m_num_pending = 0;
+        m_start_time_s = 0;
+        m_rate_delta_us = 0;
+        m_last_get_req_us = 0;
+        m_reqlet_vector_idx = 0;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
 t_client::~t_client()
 {
         for(reqlet_vector_t::const_iterator i_reqlet = m_reqlet_vector.begin();
@@ -713,6 +741,8 @@ void *t_client::evr_loop_timer_cb(void *a_data)
 void *t_client::t_run(void *a_nothing)
 {
 
+        reset();
+
         m_stopped = false;
 
         // Set thread local
@@ -856,6 +886,14 @@ int32_t t_client::start_connections(void)
 {
         int32_t l_status;
         reqlet *l_reqlet = NULL;
+
+        // -------------------------------------------------
+        // TODO
+        // For reuse
+        // 1. Remove reuse from writeable
+        // 2. create ncache from host+port to active nconn
+        // 3. If found reuse -else evict object and restart
+        // -------------------------------------------------
 
         // Find an empty client slot.
         //NDBG_PRINT("m_conn_free_list.size(): %Zu\n", m_conn_free_list.size());

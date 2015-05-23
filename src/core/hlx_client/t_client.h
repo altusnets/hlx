@@ -194,6 +194,8 @@ public:
         int32_t append_summary(reqlet *a_reqlet);
         const reqlet_vector_t &get_reqlet_vector(void) {return m_reqlet_vector;};
 
+        void reset(void);
+
         // -------------------------------------------------
         // Public members
         // -------------------------------------------------
