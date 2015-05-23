@@ -98,6 +98,7 @@ typedef struct settings_struct
         bool m_quiet;
         bool m_show_stats;
         bool m_show_summary;
+        bool m_cli;
         ns_hlx::hlx_client *m_hlx_client;
 
         // ---------------------------------
@@ -109,6 +110,7 @@ typedef struct settings_struct
                 m_quiet(false),
                 m_show_stats(false),
                 m_show_summary(false),
+                m_cli(false),
                 m_hlx_client(NULL)
         {}
 
@@ -188,7 +190,7 @@ void nonblock(int state)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void command_exec(settings_struct_t &a_settings)
+int command_exec(settings_struct_t &a_settings)
 {
         int i = 0;
         char l_cmd = ' ';
@@ -197,21 +199,31 @@ void command_exec(settings_struct_t &a_settings)
 
         nonblock(NB_ENABLE);
 
-        //: ------------------------------------
-        //:   Loop forever until user quits
-        //: ------------------------------------
+        // run...
+        int l_status;
+        l_status = a_settings.m_hlx_client->run();
+        if(HLX_CLIENT_STATUS_OK != l_status)
+        {
+                return -1;
+        }
+
+        // ---------------------------------------
+        //   Loop forever until user quits
+        // ---------------------------------------
         while (!g_test_finished)
         {
                 i = kbhit();
                 if (i != 0)
                 {
-
                         l_cmd = fgetc(stdin);
 
                         switch (l_cmd)
                         {
 
-                        // Quit -only works when not reading from stdin
+                        // -------------------------------------------
+                        // Quit
+                        // -only works when not reading from stdin
+                        // -------------------------------------------
                         case 'q':
                         {
                                 g_test_finished = true;
@@ -221,7 +233,9 @@ void command_exec(settings_struct_t &a_settings)
                                 break;
                         }
 
+                        // -------------------------------------------
                         // Default
+                        // -------------------------------------------
                         default:
                         {
                                 break;
@@ -253,6 +267,110 @@ void command_exec(settings_struct_t &a_settings)
         }
 
         nonblock(NB_DISABLE);
+
+        // wait for completion...
+        a_settings.m_hlx_client->wait_till_stopped();
+
+        // One more status for the lovers
+        if(a_settings.m_show_stats)
+        {
+                a_settings.m_hlx_client->display_status_line(a_settings.m_color);
+        }
+
+        return 0;
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+#define MAX_CMD_SIZE 64
+int command_exec_cli(settings_struct_t &a_settings)
+{
+        bool l_done = false;
+
+        // -------------------------------------------
+        // Interactive mode banner
+        // -------------------------------------------
+        if(a_settings.m_color)
+        {
+                printf("%shle interactive mode%s: (%stype h for command help%s)\n",
+                                ANSI_COLOR_FG_YELLOW, ANSI_COLOR_OFF,
+                                ANSI_COLOR_FG_CYAN, ANSI_COLOR_OFF);
+        }
+        else
+        {
+                printf("hle interactive mode: (type h for command help)\n");
+        }
+
+        // ---------------------------------------
+        //   Loop forever until user quits
+        // ---------------------------------------
+        while (!l_done)
+        {
+
+                // -------------------------------------------
+                // Interactive mode prompt
+                // -------------------------------------------
+                if(a_settings.m_color)
+                {
+                        printf("%shle>>%s", ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF);
+                }
+                else
+                {
+                        printf("hle>>");
+                }
+                fflush(stdout);
+
+                char l_cmd[MAX_CMD_SIZE] = {' '};
+                char *l_status;
+                l_status = fgets(l_cmd, MAX_CMD_SIZE, stdin);
+                if(!l_status)
+                {
+                        printf("Error reading cmd from stdin\n");
+                        return -1;
+                }
+
+                switch (l_cmd[0])
+                {
+
+                // -------------------------------------------
+                // Quit
+                // -only works when not reading from stdin
+                // -------------------------------------------
+                case 'q':
+                {
+                        l_done = true;
+                        break;
+                }
+
+                // -------------------------------------------
+                // run
+                // -------------------------------------------
+                case 'r':
+                {
+                        int l_status;
+                        l_status = command_exec(a_settings);
+                        if(l_status != 0)
+                        {
+                                return -1;
+                        }
+                }
+
+                // -------------------------------------------
+                // Default
+                // -------------------------------------------
+                default:
+                {
+                        break;
+                }
+                }
+
+        }
+
+        return 0;
 
 }
 
@@ -671,8 +789,7 @@ int main(int argc, char** argv)
                 // ---------------------------------------
                 case 'I':
                 {
-                        l_cli = true;
-                        l_hlx_client->set_header("Connection","keep-alive");
+                        l_settings.m_cli = true;
                         break;
                 }
 
@@ -1135,43 +1252,23 @@ int main(int argc, char** argv)
                 ProfilerStart(l_gprof_file.c_str());
         }
 
-        // Run
-        if(!l_cli)
-        {
-                l_status = l_hlx_client->run();
-                if(HLX_CLIENT_STATUS_OK != l_status)
-                {
-                        printf("Error: performing run");
-                        return -1;
-                }
-
-                printf("Running again.\n");
-                l_status = l_hlx_client->run();
-
-        }
-
-        //uint64_t l_start_time_ms = get_time_ms();
-
         // -------------------------------------------
         // Run command exec
         // -------------------------------------------
-        command_exec(l_settings);
-
-        if(l_settings.m_verbose)
+        if(l_settings.m_cli)
         {
-                printf("Finished -joining all threads\n");
-        }
-
-        // Wait for completion
-        // Run
-        if(!l_cli)
-        {
-                l_hlx_client->wait_till_stopped();
-
-                // One more status for the lovers
-                if(l_settings.m_show_stats)
+                l_status = command_exec_cli(l_settings);
+                if(l_status != 0)
                 {
-                        l_hlx_client->display_status_line(l_settings.m_color);
+                        return -1;
+                }
+        }
+        else
+        {
+                l_status = command_exec(l_settings);
+                if(l_status != 0)
+                {
+                        return -1;
                 }
         }
 
