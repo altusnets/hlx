@@ -250,7 +250,7 @@ private:
         }
 
         int32_t start_connections(void);
-        int32_t cleanup_connection(nconn *a_nconn, bool a_cancel_timer = true);
+        int32_t cleanup_connection(nconn *a_nconn, bool a_cancel_timer = true, int32_t a_status = 0);
         int32_t create_request(nconn &ao_conn, reqlet &a_reqlet);
         nconn *create_new_nconn(uint32_t a_id, const reqlet &a_reqlet);
         reqlet *get_reqlet(void);

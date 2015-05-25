@@ -41,13 +41,13 @@
 //: ----------------------------------------------------------------------------
 //: Macros
 //: ----------------------------------------------------------------------------
-#define T_CLIENT_CONN_CLEANUP(a_t_client, a_conn, a_reqlet, a_status, a_response) \
+#define T_CLIENT_CONN_CLEANUP(a_t_client, a_conn, a_reqlet, a_status, a_response, a_error) \
         do { \
                 a_reqlet->set_response(a_status, a_response); \
                 if(a_t_client->m_settings.m_show_summary) a_t_client->append_summary(a_reqlet);\
                 ++(a_t_client->m_num_done);\
                 if(a_status >= 500) ++(a_t_client->m_num_error); \
-                a_t_client->cleanup_connection(a_conn); \
+                a_t_client->cleanup_connection(a_conn, true, a_error); \
         }while(0)
 
 #define T_CLIENT_SET_NCONN_OPT(_conn, _opt, _buf, _len) \
@@ -534,7 +534,7 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
                 {
                         NDBG_PRINT("Error: performing run_state_machine\n");
                 }
-                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 901, l_nconn->m_last_error.c_str());
+                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 901, l_nconn->m_last_error.c_str(), STATUS_ERROR);
                 return NULL;
         }
 
@@ -542,11 +542,11 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
         {
                 if(l_t_client->m_settings.m_connect_only)
                 {
-                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 200, "Connected Successfully");
+                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 200, "Connected Successfully", STATUS_OK);
                 }
                 else
                 {
-                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 0, "");
+                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 0, "", STATUS_ERROR);
                 }
                 return NULL;
         }
@@ -605,21 +605,31 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
                 if(l_status == STATUS_ERROR)
                 {
                         ++(l_reqlet->m_stat_agg.m_num_errors);
-                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 901, l_nconn->m_last_error.c_str());
+                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 901, l_nconn->m_last_error.c_str(), STATUS_ERROR);
                 }
                 else
                 {
-                        // Give back reqlet
-                        bool l_can_reuse = l_nconn->can_reuse();
-                        bool l_can_reuse_conn = (l_t_client->m_num_fetches == -1) ||
-                                                (l_t_client->m_num_fetches > l_t_client->m_num_pending);
 
-                        //NDBG_PRINT("CONN %sREUSE%s: l_can_reuse: %d  l_can_reuse_conn: %d\n",
-                        //              ANSI_COLOR_BG_RED, ANSI_COLOR_OFF,
-                        //              l_can_reuse,
-                        //              l_can_reuse_conn);
+                        if(l_t_client->m_settings.m_connect_only)
+                        {
+                                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 200, "Connected Successfully", STATUS_OK);
+                                return NULL;
+                        }
 
-                        if(l_can_reuse && l_can_reuse_conn)
+                        if(!l_nconn->can_reuse())
+                        {
+                                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 0, "", STATUS_OK);
+                                return NULL;
+                        }
+
+                        //NDBG_PRINT("CONN %sREUSE%s: l_nconn->can_reuse(): %d\n", ANSI_COLOR_BG_RED, ANSI_COLOR_OFF, l_nconn->can_reuse());
+
+                        // -------------------------------------------
+                        // TODO
+                        // Add back to reuse pool
+                        // -------------------------------------------
+
+                        if(!l_t_client->is_pending_done())
                         {
                                 ++l_reqlet->m_stat_agg.m_num_conn_completed;
 
@@ -636,15 +646,7 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
                                 //              ANSI_COLOR_BG_RED, ANSI_COLOR_OFF,
                                 //              l_can_reuse,
                                 //              l_can_reuse_conn);
-
-                                if(l_t_client->m_settings.m_connect_only)
-                                {
-                                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 200, "Connected Successfully");
-                                }
-                                else
-                                {
-                                        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 0, "");
-                                }
+                                T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 0, "", STATUS_OK);
                         }
                 }
                 return NULL;
@@ -718,7 +720,7 @@ void *t_client::evr_loop_file_timeout_cb(void *a_data)
         ++l_reqlet->m_stat_agg.m_num_idle_killed;
 
         // Cleanup
-        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 902, "Connection timed out");
+        T_CLIENT_CONN_CLEANUP(l_t_client, l_nconn, l_reqlet, 902, "Connection timed out", STATUS_ERROR);
 
         return NULL;
 }
@@ -889,6 +891,7 @@ int32_t t_client::start_connections(void)
 
         // -------------------------------------------------
         // TODO
+        // -------------------------------------------------
         // For reuse
         // 1. Remove reuse from writeable
         // 2. create ncache from host+port to active nconn
@@ -905,15 +908,20 @@ int32_t t_client::start_connections(void)
         {
 
                 //NDBG_PRINT("STARTING i_conn: %u\n", *i_conn);
-                if( (m_settings.m_run_time_s != -1) && (m_settings.m_run_time_s < static_cast<int32_t>(get_time_s() - m_start_time_s)) )
+                if( (m_settings.m_run_time_s != -1) && (m_settings.m_run_time_s < static_cast<int32_t>(get_time_s() - m_start_time_s)))
+                {
                     return STATUS_OK;
+                }
 
                 // Loop trying to get reqlet
                 l_reqlet = NULL;
-                while(((l_reqlet = try_get_resolved()) == NULL) && (!is_pending_done())) {
+                while(((l_reqlet = try_get_resolved()) == NULL) && (!is_pending_done()))
+                {
                     // checking the current time
-                    if( (m_settings.m_run_time_s != -1) && (m_settings.m_run_time_s < static_cast<int32_t>(get_time_s() - m_start_time_s)) )
+                    if( (m_settings.m_run_time_s != -1) && (m_settings.m_run_time_s < static_cast<int32_t>(get_time_s() - m_start_time_s)))
+                    {
                         return STATUS_OK;
+                    }
                 }
 
                 if((l_reqlet == NULL) &&
@@ -980,7 +988,7 @@ int32_t t_client::start_connections(void)
                 if(STATUS_OK != l_status)
                 {
                         NDBG_PRINT("Error: Performing do_connect\n");
-                        T_CLIENT_CONN_CLEANUP(this, l_nconn, l_reqlet, 500, "Performing do_connect");
+                        T_CLIENT_CONN_CLEANUP(this, l_nconn, l_reqlet, 500, "Performing do_connect", STATUS_ERROR);
                         continue;
                 }
         }
@@ -1074,7 +1082,7 @@ int32_t t_client::create_request(nconn &ao_conn,
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t t_client::cleanup_connection(nconn *a_nconn, bool a_cancel_timer)
+int32_t t_client::cleanup_connection(nconn *a_nconn, bool a_cancel_timer, int32_t a_status)
 {
 
         //NDBG_PRINT("%sCLEANUP%s:\n", ANSI_COLOR_BG_BLUE, ANSI_COLOR_OFF);
@@ -1087,17 +1095,17 @@ int32_t t_client::cleanup_connection(nconn *a_nconn, bool a_cancel_timer)
                 m_evr_loop->cancel_timer(&(a_nconn->m_timer_obj));
         }
         a_nconn->reset_stats();
-        a_nconn->cleanup(m_evr_loop);
-
-        //NDBG_PRINT("%sADDING_BACK%s: %u\n", ANSI_COLOR_BG_GREEN, ANSI_COLOR_OFF, (uint32_t)l_conn_id);
-
-        // Add back to free list
-        m_conn_free_list.push_back(l_conn_id);
-        m_conn_used_set.erase(l_conn_id);
 
         // Reduce num pending
         ++m_num_fetched;
         --m_num_pending;
+
+        //NDBG_PRINT("%sADDING_BACK%s: %u\n", ANSI_COLOR_BG_GREEN, ANSI_COLOR_OFF, (uint32_t)l_conn_id);
+
+        // Add back to free list
+        a_nconn->cleanup(m_evr_loop);
+        m_conn_free_list.push_back(l_conn_id);
+        m_conn_used_set.erase(l_conn_id);
 
         return STATUS_OK;
 }

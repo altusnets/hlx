@@ -389,7 +389,6 @@ int hlx_client::set_url(const std::string &a_url)
         }
 
         return HLX_CLIENT_STATUS_OK;
-
 }
 
 //: ----------------------------------------------------------------------------
