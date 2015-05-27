@@ -268,8 +268,6 @@ int command_exec(settings_struct_t &a_settings)
                 l_sent_stop = true;
         }
 
-        nonblock(NB_DISABLE);
-
         // wait for completion...
         a_settings.m_hlx_client->wait_till_stopped();
 
@@ -278,6 +276,8 @@ int command_exec(settings_struct_t &a_settings)
         {
                 a_settings.m_hlx_client->display_status_line(a_settings.m_color);
         }
+
+        nonblock(NB_DISABLE);
 
         return 0;
 
@@ -304,6 +304,7 @@ int command_exec_cli(settings_struct_t &a_settings)
         // Set to keep-alive -and reuse
         a_settings.m_hlx_client->set_header("Connection","keep-alive");
         a_settings.m_hlx_client->set_num_reqs_per_conn(-1);
+        a_settings.m_hlx_client->set_conn_reuse(true);
 
         // -------------------------------------------
         // Interactive mode banner
@@ -322,7 +323,7 @@ int command_exec_cli(settings_struct_t &a_settings)
         // ---------------------------------------
         //   Loop forever until user quits
         // ---------------------------------------
-        while (!l_done)
+        while (!l_done && !g_cancelled)
         {
 
                 // -------------------------------------------

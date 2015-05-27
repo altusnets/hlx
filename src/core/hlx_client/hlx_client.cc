@@ -114,6 +114,7 @@ int hlx_client::init_client_list(void)
         l_settings.m_connect_only = m_connect_only;
         l_settings.m_save_response = m_save_response;
         l_settings.m_collect_stats = m_collect_stats;
+        l_settings.m_conn_reuse = m_conn_reuse;
         l_settings.m_num_reqs_per_conn = m_num_reqs_per_conn;
         l_settings.m_sock_opt_recv_buf_size = m_sock_opt_recv_buf_size;
         l_settings.m_sock_opt_send_buf_size = m_sock_opt_send_buf_size;
@@ -867,6 +868,17 @@ void hlx_client::set_collect_stats(bool a_val)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+void hlx_client::set_conn_reuse(bool a_val)
+{
+        m_conn_reuse = a_val;
+}
+
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
 void hlx_client::set_sock_opt_no_delay(bool a_val)
 {
         m_sock_opt_no_delay = a_val;
@@ -1065,6 +1077,7 @@ hlx_client::hlx_client(void):
         m_show_summary(false),
         m_save_response(false),
         m_collect_stats(false),
+        m_conn_reuse(false),
 
         m_rate(-1),
         m_num_end_fetches(-1),
