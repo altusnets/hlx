@@ -57,11 +57,15 @@ SET(SRCS
     ./support/resolver.cc
     ./hlx_client/hlx_client.cc
     ./hlx_client/t_client.cc
+    ./hlx_server/hlx_server.cc
+    ./hlx_server/uri.cc
+    ./hlx_server/http_request.cc
 )
 
 # Headers
 SET(HDRS
     ./hlx_client/hlx_client.h
+    ./hlx_server/hlx_server.h
 )
 
 add_library(hlxcore STATIC ${HDRS} ${SRCS})
