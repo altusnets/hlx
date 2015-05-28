@@ -48,7 +48,7 @@
                 if(a_t_client->m_settings.m_show_summary)\
                         a_t_client->append_summary(a_reqlet);\
                 ++(a_t_client->m_num_done);\
-                if(a_status >= 500) {++(a_t_client->m_num_error); NDBG_PRINT("ERROR: status: %d\n", a_status);}\
+                if(a_status >= 500) {++(a_t_client->m_num_error);}\
                 a_t_client->cleanup_connection(a_conn, true, a_error); \
         }while(0)
 

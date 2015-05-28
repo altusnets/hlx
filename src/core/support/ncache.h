@@ -47,6 +47,7 @@ typedef enum
 template<class _Tp>
 class ncache
 {
+public:
 
         typedef std::pair<uint64_t, _Tp> hash_entry_pair_t;
         typedef std::list<hash_entry_pair_t> cache_list_t;
@@ -55,7 +56,6 @@ class ncache
         // delete callback
         typedef int (*delete_cb_t) (void* o_1, void *a_2);
 
-public:
         // ---------------------------------------
         // Constructor
         // ---------------------------------------
@@ -111,7 +111,9 @@ public:
                 m_cache_map[a_new_entry_hash] = m_cache_list.begin();
                 if (m_cache_list_size > m_max_entries)
                 {
-                        evict();
+                        m_cache_map.erase(m_cache_list.back().first);
+                        m_cache_list.pop_back();
+                        --m_cache_list_size;
                 }
         }
 

@@ -254,7 +254,6 @@ private:
         nconn_pool m_nconn_pool;
 
         sig_atomic_t m_stopped;
-
         int64_t m_num_fetches;
         int64_t m_num_fetched;
         int64_t m_num_pending;
