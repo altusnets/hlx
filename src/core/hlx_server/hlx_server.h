@@ -64,6 +64,8 @@ namespace ns_hlx {
 //: ----------------------------------------------------------------------------
 //: Types
 //: ----------------------------------------------------------------------------
+class t_server;
+typedef std::list <t_server *> t_server_list_t;
 
 //: ----------------------------------------------------------------------------
 //: hlx_server
@@ -76,43 +78,29 @@ public:
         // -------------------------------------------------
         ~hlx_server();
 
-        // Settings...
-        void set_verbose(bool a_val) { m_verbose = a_val;}
-        void set_color(bool a_val) { m_color = a_val;}
-        void set_stats(bool a_val) { m_stats = a_val;}
-        void set_port(uint16_t a_port) {m_port = a_port;}
+        // General
+        void set_stats(bool a_val);
+        void set_verbose(bool a_val);
+        void set_color(bool a_val);
+
+        // Settings
+        void set_port(uint16_t a_port);
+        void set_num_threads(uint32_t a_num_threads);
+        void set_num_parallel(uint32_t a_num_parallel);
+
+        void set_start_time_ms(uint64_t a_start_time_ms) {m_start_time_ms = a_start_time_ms;}
 
         // Running...
         int32_t run(void);
-        void *t_run(void *a_nothing);
-
         int32_t stop(void);
         int32_t wait_till_stopped(void);
-        bool is_running(void) { return !m_stopped;};
+        bool is_running(void);
 
         // -------------------------------------------------
         // Class methods
         // -------------------------------------------------
         // Get the singleton instance
         static hlx_server *get(void);
-
-        // -------------------------------------------------
-        // Public members
-        // -------------------------------------------------
-        std::string m_next_header;
-        std::string m_body;
-        http_request m_request;
-
-        // -------------------------------------------------
-        // Public static methods
-        // -------------------------------------------------
-        static int hp_on_message_begin(http_parser* a_parser);
-        static int hp_on_url(http_parser* a_parser, const char *a_at, size_t a_length);
-        static int hp_on_header_field(http_parser* a_parser, const char *a_at, size_t a_length);
-        static int hp_on_header_value(http_parser* a_parser, const char *a_at, size_t a_length);
-        static int hp_on_headers_complete(http_parser* a_parser);
-        static int hp_on_body(http_parser* a_parser, const char *a_at, size_t a_length);
-        static int hp_on_message_complete(http_parser* a_parser);
 
 private:
         // -------------------------------------------------
@@ -121,11 +109,9 @@ private:
         HLX_SERVER_DISALLOW_COPY_AND_ASSIGN(hlx_server)
         hlx_server();
 
-        //Helper for pthreads
-        static void *t_run_static(void *a_context)
-        {
-                return reinterpret_cast<hlx_server *>(a_context)->t_run(NULL);
-        }
+
+        int init(void);
+        int init_server_list(void);
 
         // -------------------------------------------------
         // Private members
@@ -138,18 +124,23 @@ private:
         bool m_color;
         bool m_stats;
 
+        // Run Settings
         uint16_t m_port;
+        uint32_t m_num_threads;
+        int32_t m_num_parallel;
 
-        http_parser_settings m_http_parser_settings;
-        http_parser m_http_parser;
+        // Stats
+        uint64_t m_start_time_ms;
+
+        // t_client
+        t_server_list_t m_t_server_list;
+        int m_evr_loop_type;
 
         // -------------------------------------------------
         // State
         // -------------------------------------------------
-        sig_atomic_t m_stopped;
-        pthread_t m_t_run_thread;
         int32_t m_server_fd;
-        bool m_cur_msg_complete;
+        bool m_is_initd;
 
         // -------------------------------------------------
         // Class members

@@ -106,7 +106,6 @@ int hlx_client::init_client_list(void)
         l_settings.m_req_body_len = m_req_body_len;
         l_settings.m_evr_loop_type = (evr_loop_type_t)m_evr_loop_type;
         l_settings.m_num_parallel = m_num_parallel;
-        l_settings.m_num_threads = m_num_threads;
         l_settings.m_timeout_s = m_timeout_s;
         l_settings.m_run_time_s = m_run_time_s;
         l_settings.m_request_mode = m_request_mode;

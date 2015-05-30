@@ -284,6 +284,7 @@ void print_usage(FILE* a_stream, int a_exit_code)
 
         fprintf(a_stream, "Server Options:\n");
         fprintf(a_stream, "  -p, --port           Server port -defaults to 23456.\n");
+        fprintf(a_stream, "  -t, --threads        Number of server threads.\n");
         fprintf(a_stream, "  \n");
 
         fprintf(a_stream, "Print Options:\n");
@@ -325,6 +326,7 @@ int main(int argc, char** argv)
                 { "help",           0, 0, 'h' },
                 { "version",        0, 0, 'v' },
                 { "port",           1, 0, 'p' },
+                { "threads",        1, 0, 't' },
                 { "verbose",        0, 0, 'r' },
                 { "color",          0, 0, 'c' },
                 { "status",         0, 0, 's' },
@@ -341,7 +343,7 @@ int main(int argc, char** argv)
         // -------------------------------------------------
         // Args...
         // -------------------------------------------------
-        char l_short_arg_list[] = "hvp:rcsG:";
+        char l_short_arg_list[] = "hvp:t:rcsG:";
         while ((l_opt = getopt_long_only(argc, argv, l_short_arg_list, l_long_options, &l_option_index)) != -1)
         {
 
@@ -362,7 +364,6 @@ int main(int argc, char** argv)
                         print_usage(stdout, 0);
                         break;
                 }
-
                 // ---------------------------------------
                 // Version
                 // ---------------------------------------
@@ -371,7 +372,6 @@ int main(int argc, char** argv)
                         print_version(stdout, 0);
                         break;
                 }
-
                 // ---------------------------------------
                 // Server port
                 // ---------------------------------------
@@ -381,7 +381,22 @@ int main(int argc, char** argv)
                         l_hlx_server->set_port(l_server_port);
                         break;
                 }
-
+                // ---------------------------------------
+                // num threads
+                // ---------------------------------------
+                case 't':
+                {
+                        int l_num_threads = 1;
+                        //NDBG_PRINT("arg: --threads: %s\n", l_argument.c_str());
+                        l_num_threads = atoi(optarg);
+                        if (l_num_threads < 1)
+                        {
+                                printf("num-threads must be at least 1\n");
+                                print_usage(stdout, -1);
+                        }
+                        l_hlx_server->set_num_threads(l_num_threads);
+                        break;
+                }
                 // ---------------------------------------
                 // verbose
                 // ---------------------------------------

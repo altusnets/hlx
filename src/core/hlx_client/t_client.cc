@@ -107,10 +107,8 @@ t_client::t_client(const settings_struct_t &a_settings,
         COPY_SETTINGS(m_verb);
         COPY_SETTINGS(m_req_body);
         COPY_SETTINGS(m_req_body_len);
-        COPY_SETTINGS(m_t_client_list);
         COPY_SETTINGS(m_evr_loop_type);
         COPY_SETTINGS(m_num_parallel);
-        COPY_SETTINGS(m_num_threads);
         COPY_SETTINGS(m_timeout_s);
         COPY_SETTINGS(m_rate);
         COPY_SETTINGS(m_request_mode);

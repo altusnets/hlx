@@ -67,10 +67,8 @@ typedef struct settings_struct
         uint32_t m_req_body_len;
 
         // run options
-        t_client_list_t m_t_client_list;
         evr_loop_type_t m_evr_loop_type;
         int32_t m_num_parallel;
-        uint32_t m_num_threads;
         uint32_t m_timeout_s;
         int32_t m_run_time_s;
         int32_t m_rate;
@@ -114,10 +112,8 @@ typedef struct settings_struct
                 m_verb("GET"),
                 m_req_body(NULL),
                 m_req_body_len(0),
-                m_t_client_list(),
                 m_evr_loop_type(EVR_LOOP_EPOLL),
                 m_num_parallel(64),
-                m_num_threads(8),
                 m_timeout_s(10),
                 m_run_time_s(-1),
                 m_rate(-1),

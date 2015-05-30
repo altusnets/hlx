@@ -285,11 +285,11 @@ int hp_on_message_complete(http_parser* a_parser)
 
                 if(http_should_keep_alive(a_parser))
                 {
-                        l_conn->m_server_response_supports_keep_alives = true;
+                        l_conn->m_supports_keep_alives = true;
                 }
                 else
                 {
-                        l_conn->m_server_response_supports_keep_alives = false;
+                        l_conn->m_supports_keep_alives = false;
                 }
 
                 // we outtie

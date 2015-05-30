@@ -1,0 +1,816 @@
+//: ----------------------------------------------------------------------------
+//: Copyright (C) 2014 Verizon.  All Rights Reserved.
+//: All Rights Reserved
+//:
+//: \file:    t_server.cc
+//: \details: TODO
+//: \author:  Reed P. Morrison
+//: \date:    03/11/2015
+//:
+//:   Licensed under the Apache License, Version 2.0 (the "License");
+//:   you may not use this file except in compliance with the License.
+//:   You may obtain a copy of the License at
+//:
+//:       http://www.apache.org/licenses/LICENSE-2.0
+//:
+//:   Unless required by applicable law or agreed to in writing, software
+//:   distributed under the License is distributed on an "AS IS" BASIS,
+//:   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//:   See the License for the specific language governing permissions and
+//:   limitations under the License.
+//:
+//: ----------------------------------------------------------------------------
+
+//: ----------------------------------------------------------------------------
+//: Includes
+//: ----------------------------------------------------------------------------
+#include "t_server.h"
+#include "util.h"
+#include "ndebug.h"
+
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+
+//: ----------------------------------------------------------------------------
+//: Constants
+//: ----------------------------------------------------------------------------
+
+//: ----------------------------------------------------------------------------
+//: Macros
+//: ----------------------------------------------------------------------------
+#define T_SERVER_CONN_CLEANUP(a_t_server, a_conn, a_reqlet, a_status, a_response, a_error) \
+        do { \
+                if(a_reqlet)\
+                        a_reqlet->set_response(a_status, a_response); \
+                if(a_t_server->m_settings.m_show_summary)\
+                        a_t_server->append_summary(a_reqlet);\
+                ++(a_t_server->m_num_done);\
+                if(a_status >= 500) {++(a_t_server->m_num_error);}\
+                a_t_server->cleanup_connection(a_conn, true, a_error); \
+        }while(0)
+
+namespace ns_hlx {
+
+//: ----------------------------------------------------------------------------
+//: Thread local global
+//: ----------------------------------------------------------------------------
+__thread t_server *g_t_server = NULL;
+__thread nconn *g_t_server_conn = NULL;
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int t_server::hp_on_message_begin(http_parser* a_parser)
+{
+        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
+        if(l_t_server)
+        {
+                if(l_t_server->m_settings.m_verbose)
+                {
+                        NDBG_OUTPUT("message begin\n");
+                }
+        }
+
+        return 0;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int t_server::hp_on_url(http_parser* a_parser, const char *a_at, size_t a_length)
+{
+        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
+        if(l_t_server)
+        {
+                if(l_t_server->m_settings.m_verbose)
+                {
+                        if(l_t_server->m_settings.m_color)
+                                NDBG_OUTPUT("url:   %s%.*s%s\n", ANSI_COLOR_FG_YELLOW, (int)a_length, a_at, ANSI_COLOR_OFF);
+                        else
+                                NDBG_OUTPUT("url:   %.*s\n", (int)a_length, a_at);
+                }
+
+                std::string l_url;
+                l_url.assign(a_at, a_length);
+                l_t_server->m_request.set_uri(l_url);
+
+        }
+
+        return 0;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int t_server::hp_on_header_field(http_parser* a_parser, const char *a_at, size_t a_length)
+{
+        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
+        if(l_t_server)
+        {
+                if(l_t_server->m_settings.m_verbose)
+                {
+                        if(l_t_server->m_settings.m_color)
+                                NDBG_OUTPUT("field:  %s%.*s%s\n", ANSI_COLOR_FG_BLUE, (int)a_length, a_at, ANSI_COLOR_OFF);
+                        else
+                                NDBG_OUTPUT("field:  %.*s\n", (int)a_length, a_at);
+                }
+
+                l_t_server->m_next_header.assign(a_at, a_length);
+        }
+
+        return 0;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int t_server::hp_on_header_value(http_parser* a_parser, const char *a_at, size_t a_length)
+{
+        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
+        if(l_t_server)
+        {
+                if(l_t_server->m_settings.m_verbose)
+                {
+                        if(l_t_server->m_settings.m_color)
+                                NDBG_OUTPUT("value:  %s%.*s%s\n", ANSI_COLOR_FG_GREEN, (int)a_length, a_at, ANSI_COLOR_OFF);
+                        else
+                                NDBG_OUTPUT("value:  %.*s\n", (int)a_length, a_at);
+                }
+
+                std::string l_val;
+                l_val.assign(a_at, a_length);
+                l_t_server->m_request.set_header(l_t_server->m_next_header, l_val);
+
+        }
+        return 0;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int t_server::hp_on_headers_complete(http_parser* a_parser)
+{
+        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
+        if(l_t_server)
+        {
+                if(l_t_server->m_settings.m_verbose)
+                {
+                        NDBG_OUTPUT("headers_complete\n");
+                }
+        }
+        return 0;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int t_server::hp_on_body(http_parser* a_parser, const char *a_at, size_t a_length)
+{
+        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
+        if(l_t_server)
+        {
+                if(l_t_server->m_settings.m_verbose)
+                {
+                        if(l_t_server->m_settings.m_color)
+                                NDBG_OUTPUT("body:  %s%.*s%s\n", ANSI_COLOR_FG_YELLOW, (int)a_length, a_at, ANSI_COLOR_OFF);
+                        else
+                                NDBG_OUTPUT("body:  %.*s\n", (int)a_length, a_at);
+                }
+
+                l_t_server->m_body.append(a_at, a_length);
+
+        }
+        return 0;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int t_server::hp_on_message_complete(http_parser* a_parser)
+{
+        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
+        if(l_t_server)
+        {
+                if(l_t_server->m_settings.m_verbose)
+                {
+                        NDBG_OUTPUT("message complete\n");
+                }
+
+                // we outtie
+                l_t_server->m_request.set_body(l_t_server->m_body);
+                l_t_server->m_cur_msg_complete = true;
+        }
+
+        return 0;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+#define COPY_SETTINGS(_field) m_settings._field = a_settings._field
+t_server::t_server(const settings_struct_t &a_settings):
+        m_t_run_thread(),
+        m_settings(),
+        m_next_header(),
+        m_body(),
+        m_request(),
+        m_stopped(false),
+        m_start_time_s(0),
+        m_evr_loop(NULL),
+        m_http_parser_settings(),
+        m_http_parser(),
+        m_scheme(nconn::SCHEME_TCP),
+        m_cur_msg_complete(false)
+{
+
+        // Friggin effc++
+        COPY_SETTINGS(m_verbose);
+        COPY_SETTINGS(m_color);
+        COPY_SETTINGS(m_evr_loop_type);
+        COPY_SETTINGS(m_num_parallel);
+        COPY_SETTINGS(m_server_fd);
+
+        // Set up callbacks...
+        m_http_parser_settings.on_message_begin = hp_on_message_begin;
+        m_http_parser_settings.on_url = hp_on_url;
+        m_http_parser_settings.on_status = NULL;
+        m_http_parser_settings.on_header_field = hp_on_header_field;
+        m_http_parser_settings.on_header_value = hp_on_header_value;
+        m_http_parser_settings.on_headers_complete = hp_on_headers_complete;
+        m_http_parser_settings.on_body = hp_on_body;
+        m_http_parser_settings.on_message_complete = hp_on_message_complete;
+
+        // Create loop
+        m_evr_loop = new evr_loop(evr_loop_file_readable_cb,
+                                  evr_loop_file_writeable_cb,
+                                  evr_loop_file_error_cb,
+                                  m_settings.m_evr_loop_type,
+                                  m_settings.m_num_parallel);
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+t_server::~t_server()
+{
+        if(m_evr_loop)
+        {
+                delete m_evr_loop;
+        }
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int t_server::run(void)
+{
+
+        int32_t l_pthread_error = 0;
+
+        l_pthread_error = pthread_create(&m_t_run_thread,
+                        NULL,
+                        t_run_static,
+                        this);
+        if (l_pthread_error != 0)
+        {
+                // failed to create thread
+
+                NDBG_PRINT("Error: creating thread.  Reason: %s\n.", strerror(l_pthread_error));
+                return STATUS_ERROR;
+
+        }
+
+        return STATUS_OK;
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void t_server::stop(void)
+{
+        m_stopped = true;
+        int32_t l_status;
+        l_status = m_evr_loop->stop();
+        if(l_status != STATUS_OK)
+        {
+                NDBG_PRINT("Error performing stop.\n");
+        }
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int t_server::accept_tcp_connection(void)
+{
+    int l_client_sock_fd;
+    sockaddr_in l_client_address;
+    uint32_t l_sockaddr_in_length;
+
+    //Set the size of the in-out parameter
+    l_sockaddr_in_length = sizeof(sockaddr_in);
+
+    //Wait for a client to connect
+    l_client_sock_fd = accept(m_settings.m_server_fd, (struct sockaddr *)&l_client_address, &l_sockaddr_in_length);
+    if (l_client_sock_fd < 0)
+    {
+            NDBG_PRINT("Error accept failed. Reason[%d]: %s\n", errno, strerror(errno));
+            return STATUS_ERROR;
+    }
+
+    return l_client_sock_fd;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void *t_server::evr_loop_file_writeable_cb(void *a_data)
+{
+        NDBG_PRINT("%sWRITEABLE%s %p\n", ANSI_COLOR_FG_BLUE, ANSI_COLOR_OFF, a_data);
+        if(!a_data)
+        {
+                return NULL;
+        }
+
+#if 0
+        nconn* l_nconn = static_cast<nconn*>(a_data);
+        reqlet *l_reqlet = static_cast<reqlet *>(l_nconn->get_data1());
+        t_server *l_t_server = g_t_server;
+
+        // Cancel last timer
+        l_t_server->m_evr_loop->cancel_timer(&(l_nconn->m_timer_obj));
+
+#if 0
+        if (false == l_t_server->has_available_fetches())
+                return NULL;
+#endif
+
+        int32_t l_status = STATUS_OK;
+        l_status = l_nconn->run_state_machine(l_t_server->m_evr_loop, l_reqlet->m_host_info);
+        if(STATUS_ERROR == l_status)
+        {
+                if(l_nconn->m_verbose)
+                {
+                        NDBG_PRINT("Error: performing run_state_machine\n");
+                }
+                T_SERVER_CONN_CLEANUP(l_t_server, l_nconn, l_reqlet, 901, l_nconn->m_last_error.c_str(), STATUS_ERROR);
+                return NULL;
+        }
+
+        if(l_nconn->is_done())
+        {
+                if(l_t_server->m_settings.m_connect_only)
+                {
+                        T_SERVER_CONN_CLEANUP(l_t_server, l_nconn, l_reqlet, 200, "Connected Successfully", STATUS_OK);
+                }
+                else
+                {
+                        T_SERVER_CONN_CLEANUP(l_t_server, l_nconn, l_reqlet, 0, "", STATUS_ERROR);
+                }
+                return NULL;
+        }
+
+
+        // Add idle timeout
+        l_t_server->m_evr_loop->add_timer( l_t_server->get_timeout_s()*1000, evr_loop_file_timeout_cb, l_nconn, &(l_nconn->m_timer_obj));
+#endif
+
+        return NULL;
+
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void *t_server::evr_loop_file_readable_cb(void *a_data)
+{
+        NDBG_PRINT("%sREADABLE%s %p\n", ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF, a_data);
+        if(!a_data)
+        {
+                //NDBG_PRINT("a_data == NULL\n");
+                return NULL;
+        }
+
+        if(a_data == g_t_server_conn)
+        {
+                NDBG_PRINT("server socket!\n");
+                int l_client_fd = g_t_server->accept_tcp_connection();
+                if(l_client_fd == STATUS_ERROR)
+                {
+                        return NULL;
+                }
+
+                // TODO remove
+                close(l_client_fd);
+
+        }
+
+
+#if 0
+        nconn* l_nconn = static_cast<nconn*>(a_data);
+        reqlet *l_reqlet = static_cast<reqlet *>(l_nconn->get_data1());
+        t_server *l_t_server = g_t_server;
+
+        // Cancel last timer
+        l_t_server->m_evr_loop->cancel_timer(&(l_nconn->m_timer_obj));
+
+        int32_t l_status = STATUS_OK;
+        l_status = l_nconn->run_state_machine(l_t_server->m_evr_loop, l_reqlet->m_host_info);
+        if((STATUS_ERROR == l_status) &&
+           l_nconn->m_verbose)
+        {
+                NDBG_PRINT("Error: performing run_state_machine\n");
+        }
+
+        if(l_status >= 0)
+        {
+                l_reqlet->m_stat_agg.m_num_bytes_read += l_status;
+        }
+
+        // Check for done...
+        if((l_nconn->is_done()) ||
+           (l_status == STATUS_ERROR))
+        {
+                // Add stats
+                add_stat_to_agg(l_reqlet->m_stat_agg, l_nconn->get_stats());
+                l_nconn->reset_stats();
+
+                // Bump stats
+                if(l_status == STATUS_ERROR)
+                {
+                        ++(l_reqlet->m_stat_agg.m_num_errors);
+                        T_SERVER_CONN_CLEANUP(l_t_server, l_nconn, l_reqlet, 901, l_nconn->m_last_error.c_str(), STATUS_ERROR);
+                }
+                else
+                {
+
+                        if(l_t_server->m_settings.m_connect_only)
+                        {
+                                T_SERVER_CONN_CLEANUP(l_t_server, l_nconn, l_reqlet, 200, "Connected Successfully", STATUS_OK);
+                                return NULL;
+                        }
+
+                        if(!l_nconn->can_reuse())
+                        {
+                                T_SERVER_CONN_CLEANUP(l_t_server, l_nconn, l_reqlet, 0, "", STATUS_OK);
+                                return NULL;
+                        }
+
+                        // TODO REMOVE
+                        //NDBG_PRINT("CONN %sREUSE%s: l_nconn->can_reuse(): %d\n", ANSI_COLOR_BG_RED, ANSI_COLOR_OFF, l_nconn->can_reuse());
+
+                        l_reqlet->set_response(STATUS_OK, "");
+                        if(l_t_server->m_settings.m_show_summary)
+                                l_t_server->append_summary(l_reqlet);
+                        ++(l_t_server->m_num_done);
+
+                        // Cancel last timer
+                        l_t_server->m_evr_loop->cancel_timer(&(l_nconn->m_timer_obj));
+                        l_nconn->reset_stats();
+
+                        // Reduce num pending
+                        ++(l_t_server->m_num_fetched);
+                        --(l_t_server->m_num_pending);
+
+                        // TODO Use pool
+                        if(!l_t_server->m_settings.m_use_persistent_pool)
+                        {
+                                if(!l_t_server->is_pending_done())
+                                {
+                                        ++l_reqlet->m_stat_agg.m_num_conn_completed;
+                                        ++l_t_server->m_num_fetched;
+
+                                        // Send request again...
+                                        l_t_server->limit_rate();
+                                        l_t_server->create_request(*l_nconn, *l_reqlet);
+                                        l_nconn->send_request(true);
+                                }
+                                else
+                                {
+                                        T_SERVER_CONN_CLEANUP(l_t_server, l_nconn, l_reqlet, 0, "", STATUS_OK);
+                                }
+
+                        }
+                        else
+                        {
+                                l_status = l_t_server->m_nconn_pool.add_idle(l_nconn);
+                                if(STATUS_OK != l_status)
+                                {
+                                        T_SERVER_CONN_CLEANUP(l_t_server, l_nconn, l_reqlet, 901, "Error setting idle", STATUS_ERROR);
+                                }
+                        }
+                }
+                return NULL;
+        }
+
+        // Add idle timeout
+        l_t_server->m_evr_loop->add_timer( l_t_server->get_timeout_s()*1000, evr_loop_file_timeout_cb, l_nconn, &(l_nconn->m_timer_obj));
+#endif
+
+        return NULL;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void *g_completion_timer;
+void *t_server::evr_loop_timer_completion_cb(void *a_data)
+{
+        return NULL;
+}
+
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void *t_server::evr_loop_file_error_cb(void *a_data)
+{
+        NDBG_PRINT("%sSTATUS_ERRORS%s\n", ANSI_COLOR_FG_RED, ANSI_COLOR_OFF);
+        return NULL;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void *t_server::evr_loop_file_timeout_cb(void *a_data)
+{
+        NDBG_PRINT("%sTIMEOUT%s %p\n", ANSI_COLOR_FG_RED, ANSI_COLOR_OFF, a_data);
+        if(!a_data)
+        {
+                //NDBG_PRINT("a_data == NULL\n");
+                return NULL;
+        }
+
+#if 0
+        nconn* l_nconn = static_cast<nconn*>(a_data);
+        reqlet *l_reqlet = static_cast<reqlet *>(l_nconn->get_data1());
+        t_server *l_t_server = g_t_server;
+
+        //printf("%sT_O%s: %p\n",ANSI_COLOR_FG_BLUE, ANSI_COLOR_OFF,
+        //                l_rconn->m_timer_obj);
+
+        // Add stats
+        add_stat_to_agg(l_reqlet->m_stat_agg, l_nconn->get_stats());
+
+        if(l_t_server->m_settings.m_verbose)
+        {
+                NDBG_PRINT("%sTIMING OUT CONN%s: i_conn: %lu HOST: %s THIS: %p\n",
+                                ANSI_COLOR_BG_RED, ANSI_COLOR_OFF,
+                                l_nconn->get_id(),
+                                l_reqlet->m_url.m_host.c_str(),
+                                l_t_server);
+        }
+
+        // Stats
+        ++l_t_server->m_num_fetched;
+        ++l_reqlet->m_stat_agg.m_num_idle_killed;
+
+        // Cleanup
+        T_SERVER_CONN_CLEANUP(l_t_server, l_nconn, l_reqlet, 902, "Connection timed out", STATUS_ERROR);
+#endif
+
+        return NULL;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void *t_server::evr_loop_timer_cb(void *a_data)
+{
+        //NDBG_PRINT("%sTIMER%s %p\n", ANSI_COLOR_FG_RED, ANSI_COLOR_OFF, a_data);
+        if(!a_data)
+        {
+                //NDBG_PRINT("a_data == NULL\n");
+                return NULL;
+        }
+        return NULL;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void *t_server::t_run(void *a_nothing)
+{
+        m_stopped = false;
+
+        // Set thread local
+        g_t_server = this;
+
+        // Set start time
+        m_start_time_s = get_time_s();
+
+        // ---------------------------------------
+        // Create a server connection object
+        // ---------------------------------------
+        g_t_server_conn = new nconn_tcp(m_settings.m_verbose,
+                                        m_settings.m_color,
+                                       -1,
+                                       true,
+                                       false,
+                                       false);
+
+        // TODO TEST --REMOVE!!!
+        // -------------------------------------------
+        // Add to event handler
+        // -------------------------------------------
+        if (0 != m_evr_loop->add_fd(m_settings.m_server_fd,
+                                    EVR_FILE_ATTR_MASK_WRITE|EVR_FILE_ATTR_MASK_READ|EVR_FILE_ATTR_MASK_STATUS_ERROR,
+                                    g_t_server_conn))
+        {
+                NDBG_PRINT("Error: Couldn't add socket file descriptor\n");
+                return NULL;
+        }
+
+        // -------------------------------------------------
+        // Run server
+        // -------------------------------------------------
+#define MAX_READ_SIZE 16384
+
+        //NDBG_PRINT("starting main loop\n");
+        //char l_read_buf[MAX_READ_SIZE];
+        while(!m_stopped)
+        {
+
+                m_evr_loop->run();
+#if 0
+                // -------------------------------------------
+                // Accept client connections
+                // -------------------------------------------
+                int l_client_sock_fd;
+                l_client_sock_fd = accept_tcp_connection(m_settings.m_server_fd);
+                if(l_client_sock_fd == STATUS_ERROR)
+                {
+                        NDBG_PRINT("Error performing accept_tcp_connection with socket number = %d\n",l_client_sock_fd);
+                        return NULL;
+                }
+#endif
+
+#if 0
+                m_next_header.clear();
+                m_body.clear();
+                m_request.clear();
+
+                // Setup parser
+                m_http_parser.data = this;
+                http_parser_init(&m_http_parser, HTTP_REQUEST);
+
+                // -------------------------------------------
+                // Read till close...
+                // -------------------------------------------
+                uint32_t l_read_size = 0;
+                l_read_size = read(l_client_sock_fd, l_read_buf, MAX_READ_SIZE);
+                //NDBG_PRINT("Read data[size: %d]\n", l_read_size);
+                //if(l_read_size > 0)
+                //{
+                //        ns_ndebug::mem_display((const uint8_t *)l_read_buf, l_read_size);
+                //}
+
+                // -------------------------------------------
+                // Parse
+                // -------------------------------------------
+                m_cur_msg_complete = false;
+                while(1)
+                {
+                        size_t l_parse_status = 0;
+                        int32_t l_read_buf_idx = 0;
+                        //NDBG_PRINT("%sHTTP_PARSER%s: m_read_buf: %p, m_read_buf_idx: %d, l_bytes_read: %d\n",
+                        //                ANSI_COLOR_BG_YELLOW, ANSI_COLOR_OFF,
+                        //                l_read_buf, (int)l_read_buf_idx, (int)l_read_size);
+                        l_parse_status = http_parser_execute(&m_http_parser, &m_http_parser_settings, l_read_buf + l_read_buf_idx, l_read_size - l_read_buf_idx);
+                        if(l_parse_status < 0)
+                        {
+                                NDBG_PRINT("Error: parse error.  Reason: %s: %s\n",
+                                                http_errno_name((enum http_errno)m_http_parser.http_errno),
+                                                http_errno_description((enum http_errno)m_http_parser.http_errno));
+                                return NULL;
+                        }
+                        l_read_buf_idx += l_parse_status;
+
+                        if(m_cur_msg_complete)
+                                break;
+                }
+
+                // -------------------------------------------
+                // Process request
+                // -------------------------------------------
+                std::string l_response_body = "{}";
+
+                // do stuff...
+
+                // -------------------------------------------
+                // Show
+                // -------------------------------------------
+                //m_request.show(m_color);
+
+                // -------------------------------------------
+                // Write response
+                // -------------------------------------------
+                std::string l_response  = "";
+                l_response += "HTTP/1.1 200 OK\r\n";
+                l_response += "Content-Type: application/json\r\n";
+
+                l_response += "Content-Length: ";
+                char l_len_str[64]; sprintf(l_len_str, "%d", (int)l_response_body.length());
+                l_response += l_len_str;
+                l_response += "\r\n\r\n";
+                l_response += l_response_body;
+
+                uint32_t l_write_size = 0;
+                l_write_size = write(l_client_sock_fd, l_response.c_str(), l_response.length());
+                if(l_write_size != l_response.length())
+                {
+                        NDBG_PRINT("Error write failed. Reason[%d]: %s\n", errno, strerror(errno));
+                        return NULL;
+
+                }
+                //NDBG_PRINT("Write data[size: %d]\n", l_write_size);
+
+                // -------------------------------------------
+                // Close
+                // -------------------------------------------
+                close(l_client_sock_fd);
+#endif
+
+        }
+
+
+        m_stopped = true;
+        return NULL;
+}
+
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t t_server::cleanup_connection(nconn *a_nconn, bool a_cancel_timer, int32_t a_status)
+{
+
+        //NDBG_PRINT("%sCLEANUP%s:\n", ANSI_COLOR_BG_BLUE, ANSI_COLOR_OFF);
+
+
+        // Cancel last timer
+        if(a_cancel_timer)
+        {
+                m_evr_loop->cancel_timer(&(a_nconn->m_timer_obj));
+        }
+
+        //NDBG_PRINT("%sADDING_BACK%s: %u\n", ANSI_COLOR_BG_GREEN, ANSI_COLOR_OFF, (uint32_t)a_nconn->get_id());
+
+        // TODO Connection teardown...
+#if 0
+        // Add back to free list
+        if(STATUS_OK != m_nconn_pool.release(a_nconn))
+        {
+                return STATUS_ERROR;
+        }
+#endif
+
+        return STATUS_OK;
+}
+
+} //namespace ns_hlx {
+
+
+

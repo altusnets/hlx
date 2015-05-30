@@ -100,6 +100,15 @@ public:
 
         } scheme_t;
 
+        typedef enum nconn_type_enum {
+
+                TYPE_CLIENT = 0,
+                TYPE_SERVER,
+                TYPE_NONE
+
+        } nconn_type_t;
+
+
         // -------------------------------------------------
         // Const
         // -------------------------------------------------
@@ -110,7 +119,8 @@ public:
               int64_t a_max_reqs_per_conn = -1,
               bool a_save_response_in_reqlet = false,
               bool a_collect_stats = false,
-              bool a_connect_only = false):
+              bool a_connect_only = false,
+              nconn_type_t a_type = TYPE_CLIENT):
                 m_scheme(SCHEME_NONE),
                 m_verbose(a_verbose),
                 m_color(a_color),
@@ -122,13 +132,14 @@ public:
                 m_connect_start_time_us(0),
                 m_request_start_time_us(0),
                 m_last_connect_time_us(0),
-                m_server_response_supports_keep_alives(false),
+                m_supports_keep_alives(false),
                 m_timer_obj(NULL),
                 m_last_error(""),
                 m_id(0),
                 m_num_reqs_per_conn(a_max_reqs_per_conn),
                 m_num_reqs(0),
-                m_connect_only(a_connect_only)
+                m_connect_only(a_connect_only),
+                m_type(a_type)
         {
                 // Set stats
                 if(m_collect_stats_flag)
@@ -150,8 +161,8 @@ public:
 
         bool can_reuse(void)
         {
-                //NDBG_PRINT("CONN ka %d / num %ld / %ld \n", m_server_response_supports_keep_alives, m_num_reqs, m_num_reqs_per_conn);
-                if(m_server_response_supports_keep_alives &&
+                //NDBG_PRINT("CONN ka %d / num %ld / %ld \n", m_supports_keep_alives, m_num_reqs, m_num_reqs_per_conn);
+                if(m_supports_keep_alives &&
                       ((m_num_reqs_per_conn == -1) ||
                        (m_num_reqs < m_num_reqs_per_conn)))
                 {
@@ -160,7 +171,7 @@ public:
                 else
                 {
                         //NDBG_PRINT("CONN supports_keep_alives: %d m_num_reqs: %ld m_num_reqs_per_conn: %ld \n",
-                        //                m_server_response_supports_keep_alives,
+                        //                m_supports_keep_alives,
                         //                m_num_reqs,
                         //                m_num_reqs_per_conn);
                         return false;
@@ -199,7 +210,7 @@ public:
         uint64_t m_connect_start_time_us;
         uint64_t m_request_start_time_us;
         uint64_t m_last_connect_time_us;
-        bool m_server_response_supports_keep_alives;
+        bool m_supports_keep_alives;
         void *m_timer_obj;
         std::string m_last_error;
 
@@ -222,6 +233,7 @@ protected:
         int64_t m_num_reqs_per_conn;
         int64_t m_num_reqs;
         bool m_connect_only;
+        nconn_type_t m_type;
 };
 
 

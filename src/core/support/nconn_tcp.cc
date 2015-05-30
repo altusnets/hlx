@@ -348,30 +348,37 @@ state_top:
         // -------------------------------------------------
         case TCP_STATE_FREE:
         {
-                int32_t l_status;
-                l_status = setup_socket(a_host_info);
-                if(l_status != STATUS_OK)
+                if(m_type == TYPE_CLIENT)
                 {
-                        return STATUS_ERROR;
-                }
+                        int32_t l_status;
+                        l_status = setup_socket(a_host_info);
+                        if(l_status != STATUS_OK)
+                        {
+                                return STATUS_ERROR;
+                        }
 
-                // Get start time
-                // Stats
-                if(m_collect_stats_flag)
+                        // Get start time
+                        // Stats
+                        if(m_collect_stats_flag)
+                        {
+                                m_connect_start_time_us = get_time_us();
+                        }
+
+                        if (0 != a_evr_loop->add_fd(m_fd,
+                                                    EVR_FILE_ATTR_MASK_STATUS_ERROR,
+                                                    this))
+                        {
+                                NCONN_ERROR("HOST[%s]: Error: Couldn't add socket file descriptor\n", m_host.c_str());
+                                return STATUS_ERROR;
+                        }
+
+                        m_tcp_state = TCP_STATE_CONNECTING;
+                        goto state_top;
+                }
+                else if(m_type == TYPE_SERVER)
                 {
-                        m_connect_start_time_us = get_time_us();
+                        // Accept
                 }
-
-                if (0 != a_evr_loop->add_fd(m_fd,
-                                            EVR_FILE_ATTR_MASK_STATUS_ERROR,
-                                            this))
-                {
-                        NCONN_ERROR("HOST[%s]: Error: Couldn't add socket file descriptor\n", m_host.c_str());
-                        return STATUS_ERROR;
-                }
-
-                m_tcp_state = TCP_STATE_CONNECTING;
-                goto state_top;
 
         }
 
