@@ -108,7 +108,8 @@ public:
         int32_t cleanup(void);
         int32_t set_opt(uint32_t a_opt, const void *a_buf, uint32_t a_len);
         int32_t get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len);
-
+        int32_t set_listening(int32_t a_val);
+        virtual bool is_listening(void) {return (m_ssl_state == SSL_STATE_LISTENING);};
         bool is_done(void) { return (m_ssl_state == SSL_STATE_DONE);}
         bool is_free(void) { return (m_ssl_state == SSL_STATE_FREE);}
         void set_state_done(void) { m_ssl_state = SSL_STATE_DONE; };
@@ -130,6 +131,7 @@ private:
         typedef enum ssl_state
         {
                 SSL_STATE_FREE = 0,
+                SSL_STATE_LISTENING,
                 SSL_STATE_CONNECTING,
 
                 // SSL

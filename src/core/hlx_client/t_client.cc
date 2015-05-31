@@ -248,33 +248,33 @@ int32_t t_client::append_summary(reqlet *a_reqlet)
         if(!a_reqlet)
                 return STATUS_ERROR;
 
-        if(a_reqlet->m_response_status == 900)
+        if(a_reqlet->m_status == 900)
         {
                 ++m_summary_error_addr;
         }
-        else if((a_reqlet->m_response_status == 0) ||
-                (a_reqlet->m_response_status == 901) ||
-                (a_reqlet->m_response_status == 902))
+        else if((a_reqlet->m_status == 0) ||
+                (a_reqlet->m_status == 901) ||
+                (a_reqlet->m_status == 902))
         {
                 // Missing ca
-                if(a_reqlet->m_response_body.find("unable to get local issuer certificate") != std::string::npos)
+                if(a_reqlet->m_body.find("unable to get local issuer certificate") != std::string::npos)
                 {
                         ++m_summary_ssl_error_other;
                 }
                 // expired
-                if(a_reqlet->m_response_body.find("certificate has expired") != std::string::npos)
+                if(a_reqlet->m_body.find("certificate has expired") != std::string::npos)
                 {
                         ++m_summary_ssl_error_expired;
                 }
                 // expired
-                if(a_reqlet->m_response_body.find("self signed certificate") != std::string::npos)
+                if(a_reqlet->m_body.find("self signed certificate") != std::string::npos)
                 {
                         ++m_summary_ssl_error_self_signed;
                 }
 
                 ++m_summary_error_conn;
         }
-        else if(a_reqlet->m_response_status == 200)
+        else if(a_reqlet->m_status == 200)
         {
                 ++m_summary_success;
 
@@ -805,19 +805,7 @@ int32_t t_client::request(reqlet *a_reqlet)
         nconn *l_nconn = NULL;
         int32_t l_status;
 
-        l_nconn = m_nconn_pool.get(a_reqlet,
-                                   m_settings.m_ssl_cipher_list,
-                                   m_settings.m_verbose,
-                                   m_settings.m_color,
-                                   m_settings.m_num_reqs_per_conn,
-                                   m_settings.m_save_response,
-                                   m_settings.m_collect_stats,
-                                   m_settings.m_connect_only,
-                                   m_settings.m_sock_opt_recv_buf_size,
-                                   m_settings.m_sock_opt_send_buf_size,
-                                   m_settings.m_sock_opt_no_delay,
-                                   m_settings.m_ssl_ctx,
-                                   m_settings.m_ssl_verify);
+        l_nconn = m_nconn_pool.get(a_reqlet, m_settings);
         if(!l_nconn)
         {
                 //NDBG_PRINT("Error l_nconn == NULL\n");

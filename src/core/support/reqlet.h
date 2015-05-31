@@ -63,6 +63,8 @@ typedef enum path_order_enum {
 //: ----------------------------------------------------------------------------
 typedef std::vector <std::string> path_vector_t;
 typedef std::map<std::string, std::string> header_map_t;
+typedef std::list <std::string> value_list_t;
+typedef std::map<std::string, value_list_t> kv_list_map_t;
 
 typedef struct range_struct {
         uint32_t m_start;
@@ -130,10 +132,10 @@ public:
                 m_url(),
                 m_host_info(),
                 m_stat_agg(),
-                m_response_headers(),
-                m_next_response_value(m_response_headers.begin()),
-                m_response_body(""),
-                m_response_status(0),
+                m_headers(),
+                m_next_value(m_headers.begin()),
+                m_body(""),
+                m_status(0),
                 m_conn_info(),
                 m_multipath(false),
                 m_id(a_id),
@@ -170,6 +172,10 @@ public:
         void set_response(uint16_t a_response_status, const char *a_response);
         void set_id(uint64_t a_id) {m_id = a_id;};
 
+        // TODO Cookies!!!
+        void set_uri(const std::string &a_uri);
+        const kv_list_map_t &get_uri_decoded_query(void);
+
         // -------------------------------------------
         // Public members
         // -------------------------------------------
@@ -177,10 +183,11 @@ public:
         host_info_t m_host_info;
         total_stat_agg_t m_stat_agg;
 
-        header_map_t m_response_headers;
-        header_map_t::iterator m_next_response_value;
-        std::string m_response_body;
-        uint16_t m_response_status;
+        // TODO Move headers to kv list type...
+        header_map_t m_headers;
+        header_map_t::iterator m_next_value;
+        std::string m_body;
+        uint16_t m_status;
         header_map_t m_conn_info;
         bool m_multipath;
 
@@ -195,9 +202,6 @@ private:
         //DISALLOW_COPY_AND_ASSIGN(reqlet)
 
 
-        // -------------------------------------------
-        // Private members
-        // -------------------------------------------
         int32_t special_effects_parse(void);
         int32_t add_option(const char *a_key, const char *a_val);
         int32_t parse_path(const char *a_path, path_substr_vector_t &ao_substr_vector, range_vector_t &ao_range_vector);
@@ -205,6 +209,9 @@ private:
                                                   const path_substr_vector_t &a_substr_vector, uint32_t a_substr_idx,
                                                   const range_vector_t &a_range_vector, uint32_t a_range_idx);
 
+        // -------------------------------------------
+        // Private members
+        // -------------------------------------------
         // Unique id
         uint64_t m_id;
         bool m_is_resolved_flag;
@@ -231,6 +238,16 @@ private:
         std::string m_label;
         uint64_t m_label_hash;
 
+
+#if 0
+        std::string m_uri;
+        std::string m_path;
+        kv_list_map_t m_query;
+        kv_list_map_t m_headers;
+        std::string m_body;
+        kv_list_map_t m_query_uri_decoded;
+#endif
+
         // -------------------------------------------
         // Class members
         // -------------------------------------------
@@ -244,5 +261,9 @@ private:
 void add_stat_to_agg(total_stat_agg_t &ao_stat_agg, const req_stat_t &a_req_stat);
 void add_to_total_stat_agg(total_stat_agg_t &ao_stat_agg, const total_stat_agg_t &a_add_total_stat);
 
+#if 0
+std::string uri_decode(const std::string & a_src);
+std::string uri_encode(const std::string & a_src);
+#endif
 
 #endif

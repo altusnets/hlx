@@ -31,6 +31,7 @@
 #include "nconn_tcp.h"
 #include "reqlet.h"
 #include "ncache.h"
+#include "settings.h"
 
 #include <list>
 #include <unordered_set>
@@ -49,6 +50,7 @@
 //: Enums
 //: ----------------------------------------------------------------------------
 
+namespace ns_hlx {
 //: ----------------------------------------------------------------------------
 //: Types
 //: ----------------------------------------------------------------------------
@@ -72,19 +74,9 @@ public:
         // -------------------------------------------------
         nconn_pool(uint32_t a_size);
         ~nconn_pool();
+        // TODO passing settings struct -readonly reference
         nconn *get(reqlet *a_reqlet,
-                   std::string &a_ssl_cipher_list,
-                   bool a_verbose = false,
-                   bool a_color = false,
-                   int64_t a_num_reqs_per_conn = -1,
-                   bool a_save_response = false,
-                   bool a_collect_stats = false,
-                   bool a_connect_only = false,
-                   int32_t a_sock_opt_recv_buf_size = -1,
-                   int32_t a_sock_opt_send_buf_size = -1,
-                   bool a_sock_opt_no_delay = false,
-                   SSL_CTX *a_ssl_ctx = NULL,
-                   bool a_ssl_verify = false);
+                   const settings_struct_t &a_settings);
         int32_t add_idle(nconn *a_nconn);
         int32_t release(nconn *a_nconn);
 
@@ -121,6 +113,7 @@ protected:
 
 };
 
+}
 
 
 #endif

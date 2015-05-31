@@ -126,7 +126,7 @@ public:
                 m_color(a_color),
                 m_host(),
                 m_stat(),
-                m_save_response_in_reqlet(a_save_response_in_reqlet),
+                m_save_in_reqlet(a_save_response_in_reqlet),
                 m_collect_stats_flag(a_collect_stats),
                 m_data1(NULL),
                 m_connect_start_time_us(0),
@@ -186,6 +186,8 @@ public:
         virtual int32_t cleanup(void) = 0;
         virtual int32_t set_opt(uint32_t a_opt, const void *a_buf, uint32_t a_len) = 0;
         virtual int32_t get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len) = 0;
+        virtual int32_t set_listening(int32_t a_val) = 0;
+        virtual bool is_listening(void) = 0;
 
         virtual void set_state_done(void) = 0;
         virtual bool is_done(void) = 0;
@@ -204,7 +206,7 @@ public:
         bool m_color;
         std::string m_host;
         req_stat_t m_stat;
-        bool m_save_response_in_reqlet;
+        bool m_save_in_reqlet;
         bool m_collect_stats_flag;
         void *m_data1;
         uint64_t m_connect_start_time_us;

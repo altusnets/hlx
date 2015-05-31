@@ -107,7 +107,7 @@ int hp_on_status(http_parser* a_parser, const char *a_at, size_t a_length)
                 // Set status code
                 l_conn->m_stat.m_status_code = a_parser->status_code;
 
-                if(l_conn->m_save_response_in_reqlet)
+                if(l_conn->m_save_in_reqlet)
                 {
                         // Get reqlet
                         reqlet *l_reqlet = static_cast<reqlet *>(l_conn->m_data1);
@@ -115,8 +115,8 @@ int hp_on_status(http_parser* a_parser, const char *a_at, size_t a_length)
                         {
                                 std::string l_status;
                                 l_status.append(a_at, a_length);
-                                l_reqlet->m_response_headers["Status"] = l_status;
-                                l_reqlet->m_response_status = a_parser->status_code;
+                                l_reqlet->m_headers["Status"] = l_status;
+                                l_reqlet->m_status = a_parser->status_code;
                         }
                 }
 
@@ -142,7 +142,7 @@ int hp_on_header_field(http_parser* a_parser, const char *a_at, size_t a_length)
                                 NDBG_OUTPUT("%s: field:  %.*s\n", l_conn->m_host.c_str(), (int)a_length, a_at);
                 }
 
-                if(l_conn->m_save_response_in_reqlet)
+                if(l_conn->m_save_in_reqlet)
                 {
                         // Get reqlet
                         reqlet *l_reqlet = static_cast<reqlet *>(l_conn->m_data1);
@@ -150,8 +150,8 @@ int hp_on_header_field(http_parser* a_parser, const char *a_at, size_t a_length)
                         {
                                 std::string l_header;
                                 l_header.append(a_at, a_length);
-                                l_reqlet->m_response_headers[l_header] = "";
-                                l_reqlet->m_next_response_value = l_reqlet->m_response_headers.find(l_header);
+                                l_reqlet->m_headers[l_header] = "";
+                                l_reqlet->m_next_value = l_reqlet->m_headers.find(l_header);
                         }
                 }
 
@@ -177,13 +177,13 @@ int hp_on_header_value(http_parser* a_parser, const char *a_at, size_t a_length)
                                 NDBG_OUTPUT("%s: value:  %.*s\n", l_conn->m_host.c_str(), (int)a_length, a_at);
                 }
 
-                if(l_conn->m_save_response_in_reqlet)
+                if(l_conn->m_save_in_reqlet)
                 {
                         // Get reqlet
                         reqlet *l_reqlet = static_cast<reqlet *>(l_conn->m_data1);
                         if(l_reqlet)
                         {
-                                (l_reqlet->m_next_response_value)->second.append(a_at, a_length);
+                                (l_reqlet->m_next_value)->second.append(a_at, a_length);
                         }
                 }
 
@@ -240,13 +240,13 @@ int hp_on_body(http_parser* a_parser, const char *a_at, size_t a_length)
                         l_conn->m_stat.m_body_bytes += a_length;
                 }
 
-                if(l_conn->m_save_response_in_reqlet)
+                if(l_conn->m_save_in_reqlet)
                 {
                         // Get reqlet
                         reqlet *l_reqlet = static_cast<reqlet *>(l_conn->m_data1);
                         if(l_reqlet)
                         {
-                                l_reqlet->m_response_body.append(a_at, a_length);
+                                l_reqlet->m_body.append(a_at, a_length);
                         }
                 }
 

@@ -25,6 +25,7 @@
 //: Includes
 //: ----------------------------------------------------------------------------
 #include "t_server.h"
+#include "reqlet.h"
 #include "util.h"
 #include "ndebug.h"
 
@@ -56,8 +57,8 @@ namespace ns_hlx {
 //: Thread local global
 //: ----------------------------------------------------------------------------
 __thread t_server *g_t_server = NULL;
-__thread nconn *g_t_server_conn = NULL;
 
+#if 0
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
@@ -218,6 +219,7 @@ int t_server::hp_on_message_complete(http_parser* a_parser)
 
         return 0;
 }
+#endif
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -228,16 +230,12 @@ int t_server::hp_on_message_complete(http_parser* a_parser)
 t_server::t_server(const settings_struct_t &a_settings):
         m_t_run_thread(),
         m_settings(),
-        m_next_header(),
-        m_body(),
-        m_request(),
+        m_nconn_pool(a_settings.m_num_parallel),
         m_stopped(false),
         m_start_time_s(0),
         m_evr_loop(NULL),
-        m_http_parser_settings(),
-        m_http_parser(),
         m_scheme(nconn::SCHEME_TCP),
-        m_cur_msg_complete(false)
+        m_nconn(NULL)
 {
 
         // Friggin effc++
@@ -245,17 +243,7 @@ t_server::t_server(const settings_struct_t &a_settings):
         COPY_SETTINGS(m_color);
         COPY_SETTINGS(m_evr_loop_type);
         COPY_SETTINGS(m_num_parallel);
-        COPY_SETTINGS(m_server_fd);
-
-        // Set up callbacks...
-        m_http_parser_settings.on_message_begin = hp_on_message_begin;
-        m_http_parser_settings.on_url = hp_on_url;
-        m_http_parser_settings.on_status = NULL;
-        m_http_parser_settings.on_header_field = hp_on_header_field;
-        m_http_parser_settings.on_header_value = hp_on_header_value;
-        m_http_parser_settings.on_headers_complete = hp_on_headers_complete;
-        m_http_parser_settings.on_body = hp_on_body;
-        m_http_parser_settings.on_message_complete = hp_on_message_complete;
+        COPY_SETTINGS(m_fd);
 
         // Create loop
         m_evr_loop = new evr_loop(evr_loop_file_readable_cb,
@@ -320,31 +308,6 @@ void t_server::stop(void)
         {
                 NDBG_PRINT("Error performing stop.\n");
         }
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int t_server::accept_tcp_connection(void)
-{
-    int l_client_sock_fd;
-    sockaddr_in l_client_address;
-    uint32_t l_sockaddr_in_length;
-
-    //Set the size of the in-out parameter
-    l_sockaddr_in_length = sizeof(sockaddr_in);
-
-    //Wait for a client to connect
-    l_client_sock_fd = accept(m_settings.m_server_fd, (struct sockaddr *)&l_client_address, &l_sockaddr_in_length);
-    if (l_client_sock_fd < 0)
-    {
-            NDBG_PRINT("Error accept failed. Reason[%d]: %s\n", errno, strerror(errno));
-            return STATUS_ERROR;
-    }
-
-    return l_client_sock_fd;
 }
 
 //: ----------------------------------------------------------------------------
@@ -421,22 +384,6 @@ void *t_server::evr_loop_file_readable_cb(void *a_data)
                 return NULL;
         }
 
-        if(a_data == g_t_server_conn)
-        {
-                NDBG_PRINT("server socket!\n");
-                int l_client_fd = g_t_server->accept_tcp_connection();
-                if(l_client_fd == STATUS_ERROR)
-                {
-                        return NULL;
-                }
-
-                // TODO remove
-                close(l_client_fd);
-
-        }
-
-
-#if 0
         nconn* l_nconn = static_cast<nconn*>(a_data);
         reqlet *l_reqlet = static_cast<reqlet *>(l_nconn->get_data1());
         t_server *l_t_server = g_t_server;
@@ -452,6 +399,29 @@ void *t_server::evr_loop_file_readable_cb(void *a_data)
                 NDBG_PRINT("Error: performing run_state_machine\n");
         }
 
+        if(l_nconn->is_listening())
+        {
+                // -----------------------------------------
+                // Make function
+                // -----------------------------------------
+                // Get connection for new fd
+                l_reqlet = new reqlet(0, 1);
+
+                l_nconn = l_t_server->m_nconn_pool.get(l_reqlet,
+                                                       l_t_server->m_settings);
+                if(!l_nconn)
+                {
+                        NDBG_PRINT("Error l_nconn == NULL\n");
+                        return NULL;
+                }
+
+                // TODO Fix!!!
+                close(l_status);
+
+                return NULL;
+        }
+
+#if 0
         if(l_status >= 0)
         {
                 l_reqlet->m_stat_agg.m_num_bytes_read += l_status;
@@ -639,23 +609,23 @@ void *t_server::t_run(void *a_nothing)
         // Set start time
         m_start_time_s = get_time_s();
 
-        // ---------------------------------------
+        // -------------------------------------------------
         // Create a server connection object
-        // ---------------------------------------
-        g_t_server_conn = new nconn_tcp(m_settings.m_verbose,
-                                        m_settings.m_color,
-                                       -1,
-                                       true,
-                                       false,
-                                       false);
+        // -------------------------------------------------
+        m_nconn = new nconn_tcp(m_settings.m_verbose,
+                                m_settings.m_color,
+                                -1,
+                                true,
+                                false,
+                                false);
 
-        // TODO TEST --REMOVE!!!
-        // -------------------------------------------
+        // Set to listening mode
+        m_nconn->set_listening(m_settings.m_fd);
+
         // Add to event handler
-        // -------------------------------------------
-        if (0 != m_evr_loop->add_fd(m_settings.m_server_fd,
+        if (0 != m_evr_loop->add_fd(m_settings.m_fd,
                                     EVR_FILE_ATTR_MASK_WRITE|EVR_FILE_ATTR_MASK_READ|EVR_FILE_ATTR_MASK_STATUS_ERROR,
-                                    g_t_server_conn))
+                                    m_nconn))
         {
                 NDBG_PRINT("Error: Couldn't add socket file descriptor\n");
                 return NULL;

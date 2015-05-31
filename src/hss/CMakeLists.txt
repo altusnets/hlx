@@ -31,8 +31,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}
 #${CMAKE_CURRENT_BINARY_DIR}
     ../core/ndebug
     ../core/hlx_server
-    ../core/support
-    ../core/http_parser
 )
 
 #add_definitions(-std=c++0x)

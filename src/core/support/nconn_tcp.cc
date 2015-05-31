@@ -303,6 +303,31 @@ int32_t nconn_tcp::receive_response(void)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
+int nconn_tcp::accept_tcp_connection(void)
+{
+        int l_client_sock_fd;
+        sockaddr_in l_client_address;
+        uint32_t l_sockaddr_in_length;
+
+        //Set the size of the in-out parameter
+        l_sockaddr_in_length = sizeof(sockaddr_in);
+
+        //Wait for a client to connect
+        l_client_sock_fd = accept(m_fd, (struct sockaddr *)&l_client_address, &l_sockaddr_in_length);
+        if (l_client_sock_fd < 0)
+        {
+                NDBG_PRINT("Error accept failed. Reason[%d]: %s\n", errno, strerror(errno));
+                return STATUS_ERROR;
+        }
+
+        return l_client_sock_fd;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
 int32_t nconn_tcp::cleanup(void)
 {
         // Shut down connection
@@ -348,38 +373,46 @@ state_top:
         // -------------------------------------------------
         case TCP_STATE_FREE:
         {
-                if(m_type == TYPE_CLIENT)
+                int32_t l_status;
+                l_status = setup_socket(a_host_info);
+                if(l_status != STATUS_OK)
                 {
-                        int32_t l_status;
-                        l_status = setup_socket(a_host_info);
-                        if(l_status != STATUS_OK)
-                        {
-                                return STATUS_ERROR;
-                        }
-
-                        // Get start time
-                        // Stats
-                        if(m_collect_stats_flag)
-                        {
-                                m_connect_start_time_us = get_time_us();
-                        }
-
-                        if (0 != a_evr_loop->add_fd(m_fd,
-                                                    EVR_FILE_ATTR_MASK_STATUS_ERROR,
-                                                    this))
-                        {
-                                NCONN_ERROR("HOST[%s]: Error: Couldn't add socket file descriptor\n", m_host.c_str());
-                                return STATUS_ERROR;
-                        }
-
-                        m_tcp_state = TCP_STATE_CONNECTING;
-                        goto state_top;
-                }
-                else if(m_type == TYPE_SERVER)
-                {
-                        // Accept
+                        return STATUS_ERROR;
                 }
 
+                // Get start time
+                // Stats
+                if(m_collect_stats_flag)
+                {
+                        m_connect_start_time_us = get_time_us();
+                }
+
+                if (0 != a_evr_loop->add_fd(m_fd,
+                                            EVR_FILE_ATTR_MASK_STATUS_ERROR,
+                                            this))
+                {
+                        NCONN_ERROR("HOST[%s]: Error: Couldn't add socket file descriptor\n", m_host.c_str());
+                        return STATUS_ERROR;
+                }
+
+                m_tcp_state = TCP_STATE_CONNECTING;
+                goto state_top;
+        }
+
+        // -------------------------------------------------
+        // STATE: LISTENING
+        // -------------------------------------------------
+        case TCP_STATE_LISTENING:
+        {
+
+                int l_client_fd = -1;
+                l_client_fd = accept_tcp_connection();
+                if(l_client_fd < 0)
+                {
+                        return STATUS_ERROR;
+                }
+
+                return l_client_fd;
         }
 
         // -------------------------------------------------
@@ -631,4 +664,14 @@ int32_t nconn_tcp::get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len)
         return STATUS_OK;
 }
 
-
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t nconn_tcp::set_listening(int32_t a_val)
+{
+        m_fd = a_val;
+        m_tcp_state = TCP_STATE_LISTENING;
+        return STATUS_OK;
+}

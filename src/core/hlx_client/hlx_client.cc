@@ -41,6 +41,7 @@
 #include "nconn_tcp.h"
 #include "tinymt64.h"
 #include "t_client.h"
+#include "settings.h"
 
 #include <string.h>
 
@@ -1314,12 +1315,12 @@ std::string hlx_client::dump_all_responses_line_dl(bool a_color,
                                 const char *l_status_val_color = "";
                                 if(a_color)
                                 {
-                                        if((*i_reqlet)->m_response_status == 200) l_status_val_color = ANSI_COLOR_FG_GREEN;
+                                        if((*i_reqlet)->m_status == 200) l_status_val_color = ANSI_COLOR_FG_GREEN;
                                         else l_status_val_color = ANSI_COLOR_FG_RED;
                                 }
                                 sprintf(l_buf, "\"%sstatus-code%s\": %s%d%s",
                                                 l_status_color.c_str(), l_off_color.c_str(),
-                                                l_status_val_color, (*i_reqlet)->m_response_status, l_off_color.c_str());
+                                                l_status_val_color, (*i_reqlet)->m_status, l_off_color.c_str());
                                 ARESP(l_buf);
                                 l_fbf = true;
                         }
@@ -1336,11 +1337,11 @@ std::string hlx_client::dump_all_responses_line_dl(bool a_color,
                         {
                                 if(l_fbf) {ARESP(", "); l_fbf = false;}
                                 //NDBG_PRINT("RESPONSE SIZE: %ld\n", (*i_reqlet)->m_response_body.length());
-                                if(!(*i_reqlet)->m_response_body.empty())
+                                if(!(*i_reqlet)->m_body.empty())
                                 {
                                         sprintf(l_buf, "\"%sbody%s\": %s",
                                                         l_body_color.c_str(), l_off_color.c_str(),
-                                                        (*i_reqlet)->m_response_body.c_str());
+                                                        (*i_reqlet)->m_body.c_str());
                                 }
                                 else
                                 {
@@ -1389,8 +1390,8 @@ std::string hlx_client::dump_all_responses_json(int a_part_map)
                         bool l_content_type_json = false;
 
                         // Search for json
-                        header_map_t::const_iterator i_h = (*i_reqlet)->m_response_headers.find("Content-type");
-                        if(i_h != (*i_reqlet)->m_response_headers.end() && i_h->second == "application/json")
+                        header_map_t::const_iterator i_h = (*i_reqlet)->m_headers.find("Content-type");
+                        if(i_h != (*i_reqlet)->m_headers.end() && i_h->second == "application/json")
                         {
                                 l_content_type_json = true;
                         }
@@ -1424,14 +1425,14 @@ std::string hlx_client::dump_all_responses_json(int a_part_map)
                         // Status Code
                         if(a_part_map & PART_STATUS_CODE)
                         {
-                                l_obj.AddMember("status-code", (*i_reqlet)->m_response_status, l_js_allocator);
+                                l_obj.AddMember("status-code", (*i_reqlet)->m_status, l_js_allocator);
                         }
 
                         // Headers
                         if(a_part_map & PART_HEADERS)
                         {
-                                for(header_map_t::iterator i_header = (*i_reqlet)->m_response_headers.begin();
-                                                i_header != (*i_reqlet)->m_response_headers.end();
+                                for(header_map_t::iterator i_header = (*i_reqlet)->m_headers.begin();
+                                                i_header != (*i_reqlet)->m_headers.end();
                                     ++i_header)
                                 {
                                         l_obj.AddMember(rapidjson::Value(i_header->first.c_str(), l_js_allocator).Move(),
@@ -1456,13 +1457,13 @@ std::string hlx_client::dump_all_responses_json(int a_part_map)
                         {
 
                                 //NDBG_PRINT("RESPONSE SIZE: %ld\n", (*i_reqlet)->m_response_body.length());
-                                if(!(*i_reqlet)->m_response_body.empty())
+                                if(!(*i_reqlet)->m_body.empty())
                                 {
                                         // Append json
                                         if(l_content_type_json)
                                         {
                                                 rapidjson::Document l_doc_body;
-                                                l_doc_body.Parse((*i_reqlet)->m_response_body.c_str());
+                                                l_doc_body.Parse((*i_reqlet)->m_body.c_str());
                                                 l_obj.AddMember("body",
                                                                 rapidjson::Value(l_doc_body, l_js_allocator).Move(),
                                                                 l_js_allocator);
@@ -1470,7 +1471,7 @@ std::string hlx_client::dump_all_responses_json(int a_part_map)
                                         }
                                         else
                                         {
-                                                JS_ADD_MEMBER("body", (*i_reqlet)->m_response_body.c_str());
+                                                JS_ADD_MEMBER("body", (*i_reqlet)->m_body.c_str());
                                         }
                                 }
                                 else

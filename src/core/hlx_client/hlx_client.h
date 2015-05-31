@@ -63,8 +63,32 @@ typedef total_stat_agg_struct total_stat_agg_t;
 typedef std::map <std::string, total_stat_agg_t> tag_stat_map_t;
 class resolver;
 
-
 namespace ns_hlx {
+
+// -----------------------------------------------
+// Output formats
+// -----------------------------------------------
+typedef enum {
+        OUTPUT_LINE_DELIMITED,
+        OUTPUT_JSON
+} output_type_t;
+
+typedef enum {
+        PART_HOST = 1,
+        PART_SERVER = 1 << 1,
+        PART_STATUS_CODE = 1 << 2,
+        PART_HEADERS = 1 << 3,
+        PART_BODY = 1 << 4
+} output_part_t;
+
+typedef enum {
+
+        REQUEST_MODE_SEQUENTIAL = 0,
+        REQUEST_MODE_RANDOM,
+        REQUEST_MODE_ROUND_ROBIN
+
+} request_mode_t;
+
 //: ----------------------------------------------------------------------------
 //: Types
 //: ----------------------------------------------------------------------------
@@ -91,30 +115,6 @@ typedef struct host_struct {
 typedef std::list <host_t> host_list_t;
 typedef std::list <std::string> server_list_t;
 typedef std::map <std::string, uint32_t> summary_map_t;
-
-// -----------------------------------------------
-// Output formats
-// -----------------------------------------------
-typedef enum {
-        OUTPUT_LINE_DELIMITED,
-        OUTPUT_JSON
-} output_type_t;
-
-typedef enum {
-        PART_HOST = 1,
-        PART_SERVER = 1 << 1,
-        PART_STATUS_CODE = 1 << 2,
-        PART_HEADERS = 1 << 3,
-        PART_BODY = 1 << 4
-} output_part_t;
-
-typedef enum {
-
-        REQUEST_MODE_SEQUENTIAL = 0,
-        REQUEST_MODE_RANDOM,
-        REQUEST_MODE_ROUND_ROBIN
-
-} request_mode_t;
 
 //: ----------------------------------------------------------------------------
 //: hlx_client

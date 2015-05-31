@@ -84,6 +84,7 @@ typedef struct settings_struct
         bool m_verbose;
         bool m_color;
         bool m_show_stats;
+        ns_hlx::hlx_server *m_hlx_server;
 
         // ---------------------------------
         // Defaults...
@@ -91,28 +92,32 @@ typedef struct settings_struct
         settings_struct() :
                 m_verbose(false),
                 m_color(false),
-                m_show_stats(false)
+                m_show_stats(false),
+                m_hlx_server(NULL)
         {}
+private:
+        HLX_SERVER_DISALLOW_COPY_AND_ASSIGN(settings_struct);
 
 } settings_struct_t;
 
-// ---------------------------------------------------------
-// Structure of arguments to pass to client thread
-// ---------------------------------------------------------
-typedef struct thread_args_struct
-{
-        settings_struct m_settings;
-        thread_args_struct() :
-                m_settings()
-        {};
-
-} thread_args_struct_t;
-
 //: ----------------------------------------------------------------------------
-//: Globals
+//: \details: Signal handler
+//: \return:  TODO
+//: \param:   TODO
 //: ----------------------------------------------------------------------------
 bool g_test_finished = false;
 bool g_cancelled = false;
+settings_struct_t *g_settings = NULL;
+void sig_handler(int signo)
+{
+        if (signo == SIGINT)
+        {
+                // Kill program
+                g_test_finished = true;
+                g_cancelled = true;
+                g_settings->m_hlx_server->stop();
+        }
+}
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -165,12 +170,11 @@ void nonblock(int state)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void command_exec(thread_args_struct_t &a_thread_args)
+void command_exec(settings_struct_t &a_settings)
 {
         int i = 0;
         char l_cmd = ' ';
         bool l_sent_stop = false;
-        ns_hlx::hlx_server *l_hlx_server = ns_hlx::hlx_server::get();
         //bool l_first_time = true;
 
         nonblock(NB_ENABLE);
@@ -193,7 +197,7 @@ void command_exec(thread_args_struct_t &a_thread_args)
                         {
                                 g_test_finished = true;
                                 g_cancelled = true;
-                                l_hlx_server->stop();
+                                a_settings.m_hlx_server->stop();
                                 l_sent_stop = true;
                                 break;
                         }
@@ -214,7 +218,7 @@ void command_exec(thread_args_struct_t &a_thread_args)
                 //        l_reqlet_repo->display_status_line(a_thread_args.m_settings.m_color);
                 //}
 
-                if (!l_hlx_server->is_running())
+                if (!a_settings.m_hlx_server->is_running())
                 {
                         g_test_finished = true;
                 }
@@ -223,29 +227,12 @@ void command_exec(thread_args_struct_t &a_thread_args)
         // Send stop -if unsent
         if(!l_sent_stop)
         {
-                l_hlx_server->stop();
+                a_settings.m_hlx_server->stop();
                 l_sent_stop = true;
         }
 
         nonblock(NB_DISABLE);
 
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: Signal handler
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-void sig_handler(int signo)
-{
-        if (signo == SIGINT)
-        {
-                // Kill program
-                //NDBG_PRINT("SIGINT\n");
-                g_test_finished = true;
-                g_cancelled = true;
-                ns_hlx::hlx_server::get()->stop();
-        }
 }
 
 //: ----------------------------------------------------------------------------
@@ -311,9 +298,11 @@ int main(int argc, char** argv)
 {
 
         settings_struct_t l_settings;
-        thread_args_struct_t l_thread_args;
+        ns_hlx::hlx_server *l_hlx_server = new ns_hlx::hlx_server();
+        l_settings.m_hlx_server = l_hlx_server;
 
-        ns_hlx::hlx_server *l_hlx_server = ns_hlx::hlx_server::get();
+        // For sighandler
+        g_settings = &l_settings;
 
         // -------------------------------------------
         // Get args...
@@ -508,8 +497,7 @@ int main(int argc, char** argv)
         // Run command exec
         // -------------------------------------------
         // Copy in settings
-        l_thread_args.m_settings = l_settings;
-        command_exec(l_thread_args);
+        command_exec(l_settings);
 
         if(l_settings.m_verbose)
         {

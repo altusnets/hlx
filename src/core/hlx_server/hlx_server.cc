@@ -247,7 +247,7 @@ int hlx_server::stop(void)
         }
 
         // shutdown
-        shutdown(m_server_fd, SHUT_RD);
+        shutdown(m_fd, SHUT_RD);
 
         return l_retval;
 }
@@ -313,8 +313,8 @@ int hlx_server::init(void)
         // not initialized yet
 
         // Create listen socket
-        m_server_fd = create_tcp_server_socket(m_port);
-        if(m_server_fd == STATUS_ERROR)
+        m_fd = create_tcp_server_socket(m_port);
+        if(m_fd == STATUS_ERROR)
         {
             NDBG_PRINT("Error performing create_tcp_server_socket with port number = %d", m_port);
             return HLX_SERVER_STATUS_ERROR;
@@ -356,7 +356,7 @@ int hlx_server::init_server_list(void)
         l_settings.m_color = m_color;
         l_settings.m_evr_loop_type = (evr_loop_type_t)m_evr_loop_type;
         l_settings.m_num_parallel = m_num_parallel;
-        l_settings.m_server_fd = m_server_fd;
+        l_settings.m_fd = m_fd;
 
         // -------------------------------------------
         // Create t_client list...
@@ -396,7 +396,7 @@ hlx_server::hlx_server(void):
         // TODO Make define
         m_evr_loop_type(EVR_LOOP_EPOLL),
 
-        m_server_fd(-1),
+        m_fd(-1),
         m_is_initd(false)
 {
 
@@ -411,30 +411,6 @@ hlx_server::~hlx_server()
 {
         // TODO
 }
-
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-hlx_server *hlx_server::get(void)
-{
-        if (m_singleton_ptr == NULL) {
-                //If not yet created, create the singleton instance
-                m_singleton_ptr = new hlx_server();
-
-                // Initialize
-
-        }
-        return m_singleton_ptr;
-}
-
-//: ----------------------------------------------------------------------------
-//: Class variables
-//: ----------------------------------------------------------------------------
-// the pointer to the singleton for the instance
-hlx_server *hlx_server::m_singleton_ptr;
 
 }
 

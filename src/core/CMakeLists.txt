@@ -32,6 +32,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}
     ./evr
     ./cityhash
     ./support
+    ./hlx_client
+    ./hlk_server
 )
 
 # Source files
@@ -55,12 +57,11 @@ SET(SRCS
     ./support/nconn_pool.cc
     ./support/base64.cc
     ./support/resolver.cc
+    ./support/uri.cc
     ./hlx_client/hlx_client.cc
     ./hlx_client/t_client.cc
     ./hlx_server/hlx_server.cc
     ./hlx_server/t_server.cc
-    ./hlx_server/uri.cc
-    ./hlx_server/http_request.cc
 )
 
 # Headers

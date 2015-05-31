@@ -27,8 +27,8 @@
 //: Includes
 //: ----------------------------------------------------------------------------
 #include "hlx_server.h"
-#include "nconn_ssl.h"
-#include "nconn_tcp.h"
+#include "nconn_pool.h"
+#include "settings.h"
 #include "ndebug.h"
 #include "evr.h"
 
@@ -52,38 +52,6 @@
 namespace ns_hlx {
 
 //: ----------------------------------------------------------------------------
-//: Settings
-//: ----------------------------------------------------------------------------
-typedef struct settings_struct
-{
-        bool m_verbose;
-        bool m_color;
-
-        // run options
-        evr_loop_type_t m_evr_loop_type;
-        int32_t m_num_parallel;
-
-        // fd
-        int m_server_fd;
-
-        // ---------------------------------
-        // Defaults...
-        // ---------------------------------
-        settings_struct() :
-                m_verbose(false),
-                m_color(false),
-                m_evr_loop_type(EVR_LOOP_EPOLL),
-                m_num_parallel(64),
-
-                m_server_fd(-1)
-        {}
-
-private:
-        DISALLOW_COPY_AND_ASSIGN(settings_struct);
-
-} settings_struct_t;
-
-//: ----------------------------------------------------------------------------
 //: t_server
 //: ----------------------------------------------------------------------------
 class t_server
@@ -99,7 +67,6 @@ public:
         void *t_run(void *a_nothing);
         void stop(void);
         bool is_running(void) { return !m_stopped; }
-        int accept_tcp_connection(void);
 
         // -------------------------------------------------
         // Public members
@@ -115,23 +82,9 @@ public:
         // -------------------------------------------------
         // Public members
         // -------------------------------------------------
-        std::string m_next_header;
-        std::string m_body;
-        http_request m_request;
 
         // -------------------------------------------------
-        // Public static methods
-        // -------------------------------------------------
-        static int hp_on_message_begin(http_parser* a_parser);
-        static int hp_on_url(http_parser* a_parser, const char *a_at, size_t a_length);
-        static int hp_on_header_field(http_parser* a_parser, const char *a_at, size_t a_length);
-        static int hp_on_header_value(http_parser* a_parser, const char *a_at, size_t a_length);
-        static int hp_on_headers_complete(http_parser* a_parser);
-        static int hp_on_body(http_parser* a_parser, const char *a_at, size_t a_length);
-        static int hp_on_message_complete(http_parser* a_parser);
-
-        // -------------------------------------------------
-        // Static (class) methods
+        // Public Static (class) methods
         // -------------------------------------------------
         static void *evr_loop_file_writeable_cb(void *a_data);
         static void *evr_loop_file_readable_cb(void *a_data);
@@ -153,26 +106,16 @@ private:
         }
 
         int32_t cleanup_connection(nconn *a_nconn, bool a_cancel_timer = true, int32_t a_status = 0);
+
         // -------------------------------------------------
         // Private members
         // -------------------------------------------------
-        // client config
+        nconn_pool m_nconn_pool;
         sig_atomic_t m_stopped;
-
         int32_t m_start_time_s;
-
-        // Get evr_loop
         evr_loop *m_evr_loop;
-
-
-        http_parser_settings m_http_parser_settings;
-        http_parser m_http_parser;
-
-        // -------------------------------------------------
-        // State
-        // -------------------------------------------------
         nconn::scheme_t m_scheme;
-        bool m_cur_msg_complete;
+        nconn *m_nconn;
 
 };
 

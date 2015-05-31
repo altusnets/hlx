@@ -530,6 +530,15 @@ state_top:
         }
 
         // -------------------------------------------------
+        // STATE: FREE
+        // -------------------------------------------------
+        case SSL_STATE_LISTENING:
+        {
+                // TODO
+                break;
+        }
+
+        // -------------------------------------------------
         // STATE: CONNECTING
         // -------------------------------------------------
         case SSL_STATE_CONNECTING:
@@ -925,12 +934,32 @@ int32_t nconn_ssl::get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len)
         return STATUS_OK;
 }
 
-// -------------------------------------------
-// Check host name
-// Based on example from:
-// "Network Security with OpenSSL" pg. 135-136
-// Returns 0 on Success, -1 on Failure
-// -------------------------------------------
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t nconn_ssl::set_listening(int32_t a_val)
+{
+        // TODO RUN SUPER
+        int32_t l_status;
+        l_status = nconn_tcp::set_listening(a_val);
+        if((l_status != STATUS_OK) &&
+           (l_status != m_opt_unhandled))
+        {
+                return STATUS_ERROR;
+        }
+
+        m_ssl_state = SSL_STATE_LISTENING;
+        return STATUS_OK;
+}
+
+//: ----------------------------------------------------------------------------
+//: Check host name
+//: Based on example from:
+//: "Network Security with OpenSSL" pg. 135-136
+//: Returns 0 on Success, -1 on Failure
+//: ----------------------------------------------------------------------------
 static int validate_server_certificate_hostname(X509* a_cert, const char* a_host)
 {
         typedef std::vector <std::string> cert_name_list_t;

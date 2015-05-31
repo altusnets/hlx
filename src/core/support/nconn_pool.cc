@@ -49,24 +49,14 @@
                 } \
         } while(0)
 
+namespace ns_hlx {
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
 nconn *nconn_pool::get(reqlet *a_reqlet,
-                       std::string &a_ssl_cipher_list,
-                       bool a_verbose,
-                       bool a_color,
-                       int64_t a_num_reqs_per_conn,
-                       bool a_save_response,
-                       bool a_collect_stats,
-                       bool a_connect_only,
-                       int32_t a_sock_opt_recv_buf_size,
-                       int32_t a_sock_opt_send_buf_size,
-                       bool a_sock_opt_no_delay,
-                       SSL_CTX *a_ssl_ctx,
-                       bool a_ssl_verify)
+                       const settings_struct_t &a_settings)
 {
 
         if(!m_initd)
@@ -152,21 +142,21 @@ nconn *nconn_pool::get(reqlet *a_reqlet,
                 //NDBG_PRINT("CREATING NEW CONNECTION: id: %u\n", a_id);
                 if(a_reqlet->m_url.m_scheme == nconn::SCHEME_TCP)
                 {
-                        l_nconn = new nconn_tcp(a_verbose,
-                                                a_color,
-                                                a_num_reqs_per_conn,
-                                                a_save_response,
-                                                a_collect_stats,
-                                                a_connect_only);
+                        l_nconn = new nconn_tcp(a_settings.m_verbose,
+                                        a_settings.m_color,
+                                        a_settings.m_num_reqs_per_conn,
+                                        a_settings.m_save_response,
+                                        a_settings.m_collect_stats,
+                                        a_settings.m_connect_only);
                 }
                 else if(a_reqlet->m_url.m_scheme == nconn::SCHEME_SSL)
                 {
-                        l_nconn = new nconn_ssl(a_verbose,
-                                                a_color,
-                                                a_num_reqs_per_conn,
-                                                a_save_response,
-                                                a_collect_stats,
-                                                a_connect_only);
+                        l_nconn = new nconn_ssl(a_settings.m_verbose,
+                                        a_settings.m_color,
+                                        a_settings.m_num_reqs_per_conn,
+                                        a_settings.m_save_response,
+                                        a_settings.m_collect_stats,
+                                        a_settings.m_connect_only);
                 }
 
                 l_nconn->set_id(*i_conn);
@@ -175,27 +165,27 @@ nconn *nconn_pool::get(reqlet *a_reqlet,
                 // Set options
                 // -------------------------------------------
                 // Set generic options
-                T_CLIENT_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_RECV_BUF_SIZE, NULL, a_sock_opt_recv_buf_size);
-                T_CLIENT_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_SEND_BUF_SIZE, NULL, a_sock_opt_send_buf_size);
-                T_CLIENT_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_NO_DELAY, NULL, a_sock_opt_no_delay);
+                T_CLIENT_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_RECV_BUF_SIZE, NULL, a_settings.m_sock_opt_recv_buf_size);
+                T_CLIENT_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_SEND_BUF_SIZE, NULL, a_settings.m_sock_opt_send_buf_size);
+                T_CLIENT_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_NO_DELAY, NULL, a_settings.m_sock_opt_no_delay);
 
                 // Set ssl options
                 if(a_reqlet->m_url.m_scheme == nconn::SCHEME_SSL)
                 {
                         T_CLIENT_SET_NCONN_OPT((*l_nconn),
                                                nconn_ssl::OPT_SSL_CIPHER_STR,
-                                               a_ssl_cipher_list.c_str(),
-                                               a_ssl_cipher_list.length());
+                                               a_settings.m_ssl_cipher_list.c_str(),
+                                               a_settings.m_ssl_cipher_list.length());
 
                         T_CLIENT_SET_NCONN_OPT((*l_nconn),
                                                nconn_ssl::OPT_SSL_CTX,
-                                               a_ssl_ctx,
-                                               sizeof(a_ssl_ctx));
+                                               a_settings.m_ssl_ctx,
+                                               sizeof(a_settings.m_ssl_ctx));
 
                         T_CLIENT_SET_NCONN_OPT((*l_nconn),
                                                nconn_ssl::OPT_SSL_VERIFY,
-                                               &(a_ssl_verify),
-                                               sizeof(a_ssl_verify));
+                                               &(a_settings.m_ssl_verify),
+                                               sizeof(a_settings.m_ssl_verify));
 
                         //T_CLIENT_SET_NCONN_OPT((*l_nconn), nconn_ssl::OPT_SSL_OPTIONS,
                         //                              &(m_settings.m_ssl_options),
@@ -355,3 +345,4 @@ nconn_pool::~nconn_pool(void)
 
 }
 
+}
