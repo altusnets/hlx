@@ -35,6 +35,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}
     ../core/http_parser
     ../core/tinymt
     ../core/cityhash
+    ../core/hlx_client
 )
 
 #add_definitions(-std=c++0x)
@@ -43,14 +44,14 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}
 SET(SRCS
   main.cc
   stats_collector.cc
-  t_client.cc
+  t_hlp_client.cc
   hlp.cc
 )
 
 # Headers
 SET(HDRS
   stats_collector.h
-  t_client.h
+  t_hlp_client.h
   hlp.h
 )
 

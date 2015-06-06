@@ -59,6 +59,7 @@
                 }\
         }while(0)
 
+namespace ns_hlx {
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -453,3 +454,5 @@ resolver::~resolver()
         pthread_mutex_destroy(&m_cache_mutex);
 
 }
+
+} // ns_hlx

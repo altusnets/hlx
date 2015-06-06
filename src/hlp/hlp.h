@@ -70,8 +70,8 @@ typedef std::map<std::string, std::string> header_map_t;
 struct ssl_ctx_st;
 typedef ssl_ctx_st SSL_CTX;
 
-class t_client;
-typedef std::vector <t_client *> t_client_list_t;
+class t_hlp_client;
+typedef std::vector <t_hlp_client *> t_hlp_client_list_t;
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -140,7 +140,7 @@ public:
         // Public members
         // -------------------------------------------------
         pthread_t m_t_feed_playback_thread;
-        t_client_list_t m_t_client_list;
+        t_hlp_client_list_t m_t_client_list;
 
 
 private:

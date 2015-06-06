@@ -43,6 +43,8 @@
 //: ----------------------------------------------------------------------------
 //: Types
 //: ----------------------------------------------------------------------------
+namespace ns_hlx {
+
 // TODO Create struct with TTL for storing ai cache
 typedef std::map <std::string, std::string> ai_cache_map_t;
 
@@ -108,5 +110,6 @@ private:
 
 };
 
+} // ns_hlx
 
 #endif

@@ -24,9 +24,10 @@
 //: ----------------------------------------------------------------------------
 //: Includes
 //: ----------------------------------------------------------------------------
+#include "hlp.h"
 #include "stats_collector.h"
 #include "util.h"
-#include "t_client.h"
+#include "t_hlp_client.h"
 
 #include <stdint.h>
 #ifndef __STDC_FORMAT_MACROS
@@ -41,7 +42,7 @@
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
 static void show_total_agg_stat(std::string &a_tag,
-        const total_stat_agg_t &a_stat,
+        const ns_hlx::total_stat_agg_t &a_stat,
         double a_time_elapsed_s,
         uint32_t a_max_parallel,
         bool a_color)
@@ -80,7 +81,7 @@ static void show_total_agg_stat(std::string &a_tag,
         else
                 printf("| HTTP response codes: \n");
 
-        for(status_code_count_map_t::const_iterator i_status_code = a_stat.m_status_code_count_map.begin();
+        for(ns_hlx::status_code_count_map_t::const_iterator i_status_code = a_stat.m_status_code_count_map.begin();
                         i_status_code != a_stat.m_status_code_count_map.end();
                 ++i_status_code)
         {
@@ -106,8 +107,8 @@ void stats_collector::display_results(double a_elapsed_time,
                 bool a_color)
 {
 
-        tag_stat_map_t l_tag_stat_map;
-        total_stat_agg_t l_total;
+        ns_hlx::tag_stat_map_t l_tag_stat_map;
+        ns_hlx::total_stat_agg_t l_total;
 
         // Get stats
         get_stats(l_total, a_show_breakdown_flag, l_tag_stat_map);
@@ -122,7 +123,7 @@ void stats_collector::display_results(double a_elapsed_time,
         // -------------------------------------------
         if(a_show_breakdown_flag)
         {
-                for(tag_stat_map_t::iterator i_stat = l_tag_stat_map.begin();
+                for(ns_hlx::tag_stat_map_t::iterator i_stat = l_tag_stat_map.begin();
                                 i_stat != l_tag_stat_map.end();
                                 ++i_stat)
                 {
@@ -138,7 +139,7 @@ void stats_collector::display_results(double a_elapsed_time,
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
 static void show_total_agg_stat_legacy(std::string &a_tag,
-        const total_stat_agg_t &a_stat,
+        const ns_hlx::total_stat_agg_t &a_stat,
         std::string &a_sep,
         double a_time_elapsed_s,
         uint32_t a_max_parallel)
@@ -174,7 +175,7 @@ static void show_total_agg_stat_legacy(std::string &a_tag,
         if(a_sep == "\n")
                 printf("%s", a_sep.c_str());
 
-        for(status_code_count_map_t::const_iterator i_status_code = a_stat.m_status_code_count_map.begin();
+        for(ns_hlx::status_code_count_map_t::const_iterator i_status_code = a_stat.m_status_code_count_map.begin();
                         i_status_code != a_stat.m_status_code_count_map.end();
                 ++i_status_code)
         {
@@ -191,9 +192,9 @@ static void show_total_agg_stat_legacy(std::string &a_tag,
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void stats_collector::get_stats(total_stat_agg_t &ao_all_stats,
+void stats_collector::get_stats(ns_hlx::total_stat_agg_t &ao_all_stats,
                 bool a_get_breakdown,
-                tag_stat_map_t &ao_breakdown_stats)
+                ns_hlx::tag_stat_map_t &ao_breakdown_stats)
 {
         // -------------------------------------------
         // Aggregate
@@ -201,20 +202,20 @@ void stats_collector::get_stats(total_stat_agg_t &ao_all_stats,
         hlp *l_hlp = hlp::get();
 
 #if 1
-        for(t_client_list_t::iterator i_c = l_hlp->m_t_client_list.begin();
+        for(t_hlp_client_list_t::iterator i_c = l_hlp->m_t_client_list.begin();
                         i_c != l_hlp->m_t_client_list.end();
                         ++i_c)
         {
 
                 // Grab a copy of the stats
-                tag_stat_map_t l_copy;
+                ns_hlx::tag_stat_map_t l_copy;
                 (*i_c)->get_stats_copy(l_copy);
-                for(tag_stat_map_t::iterator i_reqlet = l_copy.begin(); i_reqlet != l_copy.end(); ++i_reqlet)
+                for(ns_hlx::tag_stat_map_t::iterator i_reqlet = l_copy.begin(); i_reqlet != l_copy.end(); ++i_reqlet)
                 {
                         if(a_get_breakdown)
                         {
                                 std::string l_tag = i_reqlet->first;
-                                tag_stat_map_t::iterator i_stat;
+                                ns_hlx::tag_stat_map_t::iterator i_stat;
                                 if((i_stat = ao_breakdown_stats.find(l_tag)) == ao_breakdown_stats.end())
                                 {
                                         ao_breakdown_stats[l_tag] = i_reqlet->second;
@@ -270,8 +271,8 @@ void stats_collector::display_results_http_load_style(double a_elapsed_time,
                 bool a_one_line_flag)
 {
 
-        tag_stat_map_t l_tag_stat_map;
-        total_stat_agg_t l_total;
+        ns_hlx::tag_stat_map_t l_tag_stat_map;
+        ns_hlx::total_stat_agg_t l_total;
 
         // Get stats
         get_stats(l_total, a_show_breakdown_flag, l_tag_stat_map);
@@ -290,7 +291,7 @@ void stats_collector::display_results_http_load_style(double a_elapsed_time,
         // -------------------------------------------
         if(a_show_breakdown_flag)
         {
-                for(tag_stat_map_t::iterator i_stat = l_tag_stat_map.begin();
+                for(ns_hlx::tag_stat_map_t::iterator i_stat = l_tag_stat_map.begin();
                                 i_stat != l_tag_stat_map.end();
                                 ++i_stat)
                 {
@@ -310,17 +311,17 @@ void stats_collector::display_results_http_load_style(double a_elapsed_time,
 int32_t stats_collector::get_stats_json(char *l_json_buf, uint32_t l_json_buf_max_len)
 {
 
-        tag_stat_map_t l_tag_stat_map;
-        total_stat_agg_t l_total;
+        ns_hlx::tag_stat_map_t l_tag_stat_map;
+        ns_hlx::total_stat_agg_t l_total;
 
-        uint64_t l_time_ms = get_time_ms();
+        uint64_t l_time_ms = ns_hlx::get_time_ms();
         // Get stats
         get_stats(l_total, true, l_tag_stat_map);
 
         int l_cur_offset = 0;
         l_cur_offset += snprintf(l_json_buf + l_cur_offset, l_json_buf_max_len - l_cur_offset,"{\"data\": [");
         bool l_first_stat = true;
-        for(tag_stat_map_t::iterator i_agg_stat = l_tag_stat_map.begin();
+        for(ns_hlx::tag_stat_map_t::iterator i_agg_stat = l_tag_stat_map.begin();
                         i_agg_stat != l_tag_stat_map.end();
                         ++i_agg_stat)
         {
@@ -395,8 +396,8 @@ void stats_collector::display_results_line_desc(bool a_color_flag)
 void stats_collector::display_results_line(bool a_color_flag)
 {
 
-        total_stat_agg_t l_total;
-        tag_stat_map_t l_unused;
+        ns_hlx::total_stat_agg_t l_total;
+        ns_hlx::tag_stat_map_t l_unused;
         uint64_t l_cmd_total = hlp::get()->get_num_cmds();
         uint64_t l_cmd_execd = hlp::get()->get_num_cmds_serviced();
         uint32_t l_conns = hlp::get()->get_num_conns();
@@ -414,7 +415,7 @@ void stats_collector::display_results_line(bool a_color_flag)
                                         ANSI_COLOR_FG_MAGENTA, l_total.m_num_idle_killed, ANSI_COLOR_OFF,
                                         ANSI_COLOR_FG_RED, l_total.m_num_errors, ANSI_COLOR_OFF,
                                         ANSI_COLOR_FG_YELLOW, ((double)(l_total.m_num_bytes_read))/(1024.0), ANSI_COLOR_OFF,
-                                        ((double)(get_delta_time_ms(m_start_time_ms))) / 1000.0,
+                                        ((double)(ns_hlx::get_delta_time_ms(m_start_time_ms))) / 1000.0,
                                         l_conns,
                                         l_reqs
                                         );
@@ -428,14 +429,14 @@ void stats_collector::display_results_line(bool a_color_flag)
                                 l_total.m_num_idle_killed,
                                 l_total.m_num_errors,
                                 ((double)(l_total.m_num_bytes_read))/(1024.0),
-                                ((double)(get_delta_time_ms(m_start_time_ms)) / 1000.0),
+                                ((double)(ns_hlx::get_delta_time_ms(m_start_time_ms)) / 1000.0),
                                 l_conns,
                                 l_reqs
                                 );
 
         }
 
-        m_last_display_time_ms = get_time_ms();
+        m_last_display_time_ms = ns_hlx::get_time_ms();
         m_last_stat = l_total;
 
 }

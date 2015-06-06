@@ -100,6 +100,7 @@ typedef struct settings_struct
         bool m_show_summary;
         bool m_cli;
         ns_hlx::hlx_client *m_hlx_client;
+        uint32_t m_total_reqs;
 
         // ---------------------------------
         // Defaults...
@@ -111,13 +112,20 @@ typedef struct settings_struct
                 m_show_stats(false),
                 m_show_summary(false),
                 m_cli(false),
-                m_hlx_client(NULL)
+                m_hlx_client(NULL),
+                m_total_reqs(0)
         {}
 
 private:
         HLX_CLIENT_DISALLOW_COPY_AND_ASSIGN(settings_struct);
 
 } settings_struct_t;
+
+//: ----------------------------------------------------------------------------
+//: Prototypes
+//: ----------------------------------------------------------------------------
+void display_status_line(settings_struct_t &a_settings);
+void display_summary(settings_struct_t &a_settings);
 
 //: ----------------------------------------------------------------------------
 //: \details: Signal handler
@@ -249,7 +257,7 @@ int command_exec(settings_struct_t &a_settings)
 
                 if(a_settings.m_show_stats)
                 {
-                        a_settings.m_hlx_client->display_status_line(a_settings.m_color);
+                        display_status_line(a_settings);
                 }
 
                 if (!a_settings.m_hlx_client->is_running())
@@ -273,7 +281,7 @@ int command_exec(settings_struct_t &a_settings)
         // One more status for the lovers
         if(a_settings.m_show_stats)
         {
-                a_settings.m_hlx_client->display_status_line(a_settings.m_color);
+                display_status_line(a_settings);
         }
 
         nonblock(NB_DISABLE);
@@ -514,8 +522,10 @@ void print_usage(FILE* a_stream, int a_exit_code)
         fprintf(a_stream, "  -P, --pretty         Pretty output\n");
         fprintf(a_stream, "  \n");
 
+#ifdef ENABLE_PROFILER
         fprintf(a_stream, "Debug Options:\n");
         fprintf(a_stream, "  -G, --gprofile       Google profiler output file\n");
+#endif
 
         fprintf(a_stream, "  \n");
         fprintf(a_stream, "Note: If running large jobs consider enabling tcp_tw_reuse -eg:\n");
@@ -604,13 +614,15 @@ int main(int argc, char** argv)
                 { "line_delimited", 0, 0, 'l' },
                 { "json",           0, 0, 'j' },
                 { "pretty",         0, 0, 'P' },
+#ifdef ENABLE_PROFILER
                 { "gprofile",       1, 0, 'G' },
-
+#endif
                 // list sentinel
                 { 0, 0, 0, 0 }
         };
-
+#ifdef ENABLE_PROFILER
         std::string l_gprof_file;
+#endif
         std::string l_execute_line;
         std::string l_host_file_str;
         std::string l_host_file_json_str;
@@ -659,7 +671,11 @@ int main(int argc, char** argv)
         // -------------------------------------------------
         // Args...
         // -------------------------------------------------
+#ifdef ENABLE_PROFILER
         char l_short_arg_list[] = "hvu:d:f:J:x:y:O:VNF:L:Ip:t:H:X:T:R:S:DA:Crcqsmo:ljPG:";
+#else
+        char l_short_arg_list[] = "hvu:d:f:J:x:y:O:VNF:L:Ip:t:H:X:T:R:S:DA:Crcqsmo:ljP";
+#endif
         while ((l_opt = getopt_long_only(argc, argv, l_short_arg_list, l_long_options, &l_option_index)) != -1)
         {
 
@@ -1013,6 +1029,7 @@ int main(int argc, char** argv)
                         l_output_pretty = true;
                         break;
                 }
+#ifdef ENABLE_PROFILER
                 // ---------------------------------------
                 // Google Profiler Output File
                 // ---------------------------------------
@@ -1021,6 +1038,7 @@ int main(int argc, char** argv)
                         l_gprof_file = l_argument;
                         break;
                 }
+#endif
                 // What???
                 case '?':
                 {
@@ -1261,6 +1279,7 @@ int main(int argc, char** argv)
         int l_status = 0;
 
         // Set host list
+        l_settings.m_total_reqs = l_host_list.size();
         l_status = l_hlx_client->set_host_list(l_host_list);
         if(HLX_CLIENT_STATUS_OK != l_status)
         {
@@ -1268,11 +1287,13 @@ int main(int argc, char** argv)
                 return -1;
         }
 
+#ifdef ENABLE_PROFILER
         // Start Profiler
         if (!l_gprof_file.empty())
         {
                 ProfilerStart(l_gprof_file.c_str());
         }
+#endif
 
         // -------------------------------------------
         // Run command exec
@@ -1294,10 +1315,12 @@ int main(int argc, char** argv)
                 }
         }
 
+#ifdef ENABLE_PROFILER
         if (!l_gprof_file.empty())
         {
                 ProfilerStop();
         }
+#endif
 
         //uint64_t l_end_time_ms = get_time_ms() - l_start_time_ms;
 
@@ -1350,7 +1373,7 @@ int main(int argc, char** argv)
         // -------------------------------------------
         if(l_settings.m_show_summary)
         {
-                l_hlx_client->display_summary(l_settings.m_color);
+                display_summary(l_settings);
         }
 
         // -------------------------------------------
@@ -1369,4 +1392,125 @@ int main(int argc, char** argv)
 
         return 0;
 
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void display_summary(settings_struct_t &a_settings)
+{
+        std::string l_header_str = "";
+        std::string l_protocol_str = "";
+        std::string l_cipher_str = "";
+        std::string l_off_color = "";
+
+        if(a_settings.m_color)
+        {
+                l_header_str = ANSI_COLOR_FG_CYAN;
+                l_protocol_str = ANSI_COLOR_FG_GREEN;
+                l_cipher_str = ANSI_COLOR_FG_YELLOW;
+                l_off_color = ANSI_COLOR_OFF;
+        }
+#if 0
+
+        // -------------------------------------------------
+        // Get results from clients
+        // -------------------------------------------------
+        uint32_t l_num_reqlets = 0;
+        uint32_t l_summary_success = 0;
+        uint32_t l_summary_error_addr = 0;
+        uint32_t l_summary_error_conn = 0;
+        uint32_t l_summary_error_unknown = 0;
+        uint32_t l_summary_ssl_error_self_signed = 0;
+        uint32_t l_summary_ssl_error_expired = 0;
+        uint32_t l_summary_ssl_error_other = 0;
+        summary_map_t l_summary_ssl_protocols;
+        summary_map_t l_summary_ssl_ciphers;
+
+        for(t_client_list_t::const_iterator i_client = m_t_client_list.begin();
+           i_client != m_t_client_list.end();
+           ++i_client)
+        {
+                l_num_reqlets += (*i_client)->m_num_reqlets;
+                l_summary_success += (*i_client)->m_summary_success;
+                l_summary_error_addr += (*i_client)->m_summary_error_addr;
+                l_summary_error_conn += (*i_client)->m_summary_error_conn;
+                l_summary_error_unknown += (*i_client)->m_summary_error_unknown;
+                l_summary_ssl_error_self_signed += (*i_client)->m_summary_ssl_error_self_signed;
+                l_summary_ssl_error_expired += (*i_client)->m_summary_ssl_error_expired;
+                l_summary_ssl_error_other += (*i_client)->m_summary_ssl_error_other;
+                l_summary_ssl_protocols.insert((*i_client)->m_summary_ssl_protocols.begin(),
+                                               (*i_client)->m_summary_ssl_protocols.end());
+                l_summary_ssl_ciphers.insert((*i_client)->m_summary_ssl_ciphers.begin(),
+                                             (*i_client)->m_summary_ssl_ciphers.end());
+
+        }
+
+
+        NDBG_OUTPUT("****************** %sSUMMARY%s ****************** \n", l_header_str.c_str(), l_off_color.c_str());
+        NDBG_OUTPUT("| total hosts:                     %u\n",l_num_reqlets);
+        NDBG_OUTPUT("| success:                         %u\n",l_summary_success);
+        NDBG_OUTPUT("| error address lookup:            %u\n",l_summary_error_addr);
+        NDBG_OUTPUT("| error connectivity:              %u\n",l_summary_error_conn);
+        NDBG_OUTPUT("| error unknown:                   %u\n",l_summary_error_unknown);
+        NDBG_OUTPUT("| ssl error cert expired           %u\n",l_summary_ssl_error_expired);
+        NDBG_OUTPUT("| ssl error cert self-signed       %u\n",l_summary_ssl_error_self_signed);
+        NDBG_OUTPUT("| ssl error other                  %u\n",l_summary_ssl_error_other);
+
+        // Sort
+        typedef std::map<uint32_t, std::string> _sorted_map_t;
+        _sorted_map_t l_sorted_map;
+        NDBG_OUTPUT("+--------------- %sSSL PROTOCOLS%s -------------- \n", l_protocol_str.c_str(), l_off_color.c_str());
+        l_sorted_map.clear();
+        for(summary_map_t::iterator i_s = l_summary_ssl_protocols.begin(); i_s != l_summary_ssl_protocols.end(); ++i_s)
+        l_sorted_map[i_s->second] = i_s->first;
+        for(_sorted_map_t::reverse_iterator i_s = l_sorted_map.rbegin(); i_s != l_sorted_map.rend(); ++i_s)
+        NDBG_OUTPUT("| %-32s %u\n", i_s->second.c_str(), i_s->first);
+        NDBG_OUTPUT("+--------------- %sSSL CIPHERS%s ---------------- \n", l_cipher_str.c_str(), l_off_color.c_str());
+        l_sorted_map.clear();
+        for(summary_map_t::iterator i_s = l_summary_ssl_ciphers.begin(); i_s != l_summary_ssl_ciphers.end(); ++i_s)
+        l_sorted_map[i_s->second] = i_s->first;
+        for(_sorted_map_t::reverse_iterator i_s = l_sorted_map.rbegin(); i_s != l_sorted_map.rend(); ++i_s)
+        NDBG_OUTPUT("| %-32s %u\n", i_s->second.c_str(), i_s->first);
+#endif
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+void display_status_line(settings_struct_t &a_settings)
+{
+        // -------------------------------------------------
+        // Get results from clients
+        // -------------------------------------------------
+
+        // Get stats
+        ns_hlx::total_stat_agg_t l_total;
+        ns_hlx::tag_stat_map_t l_unused;
+        a_settings.m_hlx_client->get_stats(l_total, false, l_unused);
+
+        uint32_t l_num_done = l_total.m_total_reqs;
+        uint32_t l_num_resolved = l_total.m_num_resolved;
+        uint32_t l_num_get = l_total.m_num_conn_started;
+        uint32_t l_num_reqlets = a_settings.m_total_reqs;
+        uint32_t l_num_error = l_total.m_num_errors;
+
+        if(a_settings.m_color)
+        {
+                printf("Done/Resolved/Req'd/Total/Error %s%8u%s / %s%8u%s / %s%8u%s / %s%8u%s / %s%8u%s\n",
+                                ANSI_COLOR_FG_GREEN, l_num_done, ANSI_COLOR_OFF,
+                                ANSI_COLOR_FG_MAGENTA, l_num_resolved, ANSI_COLOR_OFF,
+                                ANSI_COLOR_FG_YELLOW, l_num_get, ANSI_COLOR_OFF,
+                                ANSI_COLOR_FG_BLUE, l_num_reqlets, ANSI_COLOR_OFF,
+                                ANSI_COLOR_FG_RED, l_num_error, ANSI_COLOR_OFF);
+        }
+        else
+        {
+                printf("Done/Resolved/Req'd/Total/Error %8u / %8u / %8u / %8u / %8u\n",
+                                l_num_done, l_num_resolved, l_num_get, l_num_reqlets, l_num_error);
+        }
 }

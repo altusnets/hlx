@@ -2,7 +2,7 @@
 //: Copyright (C) 2014 Verizon.  All Rights Reserved.
 //: All Rights Reserved
 //:
-//: \file:    t_client.cc
+//: \file:    t_hlp_client.cc
 //: \details: TODO
 //: \author:  Reed P. Morrison
 //: \date:    02/07/2014
@@ -24,7 +24,7 @@
 //: ----------------------------------------------------------------------------
 //: Includes
 //: ----------------------------------------------------------------------------
-#include "t_client.h"
+#include "t_hlp_client.h"
 #include "city.h"
 #include "hlp.h"
 #include "util.h"
@@ -84,14 +84,14 @@ uint64_t get_cmd_hash(const pb_cmd_t &a_cmd);
 //: ----------------------------------------------------------------------------
 //: Thread local global
 //: ----------------------------------------------------------------------------
-__thread t_client *g_t_client = NULL;
+__thread t_hlp_client *g_t_client = NULL;
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-t_client::t_client(
+t_hlp_client::t_hlp_client(
         bool a_verbose,
         bool a_color,
         uint32_t a_sock_opt_recv_buf_size,
@@ -153,32 +153,32 @@ t_client::t_client(
         pthread_mutex_init(&m_loop_mutex, NULL);
         pthread_mutex_init(&m_nconn_lock_map_mutex, NULL);
 
-        evr_loop_type_t l_evr_loop_type = EVR_LOOP_EPOLL;
+        ns_hlx::evr_loop_type_t l_evr_loop_type = ns_hlx::EVR_LOOP_EPOLL;
         // -------------------------------------------
         // Get the event handler...
         // -------------------------------------------
         if (m_evr_type == EV_SELECT)
         {
-                l_evr_loop_type = EVR_LOOP_SELECT;
+                l_evr_loop_type = ns_hlx::EVR_LOOP_SELECT;
                 //NDBG_PRINT("Using evr_select\n");
         }
         // Default to epoll
         else
         {
-                l_evr_loop_type = EVR_LOOP_EPOLL;
+                l_evr_loop_type = ns_hlx::EVR_LOOP_EPOLL;
 
                 //NDBG_PRINT("Using evr_epoll\n");
         }
 
         // Create loop
-        m_evr_loop = new evr_loop(evr_loop_file_readable_cb,
+        m_evr_loop = new ns_hlx::evr_loop(evr_loop_file_readable_cb,
                         evr_loop_file_writeable_cb,
                         evr_loop_file_error_cb,
                         l_evr_loop_type,
                         m_max_parallel_connections, false);
 
         // Create loop
-        m_evr_cmd_loop = new evr_loop(NULL,
+        m_evr_cmd_loop = new ns_hlx::evr_loop(NULL,
                         NULL,
                         NULL,
                         l_evr_loop_type,
@@ -192,7 +192,7 @@ t_client::t_client(
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-t_client::~t_client()
+t_hlp_client::~t_hlp_client()
 {
 
 }
@@ -203,7 +203,7 @@ t_client::~t_client()
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int t_client::run(void)
+int t_hlp_client::run(void)
 {
         int32_t l_pthread_error = 0;
 
@@ -242,7 +242,7 @@ int t_client::run(void)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void *t_client::evr_loop_file_writeable_cb(void *a_data)
+void *t_hlp_client::evr_loop_file_writeable_cb(void *a_data)
 {
 
         //NDBG_PRINT("%sWRITEABLE%s %p\n", ANSI_COLOR_FG_BLUE, ANSI_COLOR_OFF, a_data);
@@ -253,8 +253,8 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
                 return NULL;
         }
 
-        t_client *l_t_client = g_t_client;
-        nconn *l_nconn = (nconn *)a_data;
+        t_hlp_client *l_t_client = g_t_client;
+        ns_hlx::nconn *l_nconn = (ns_hlx::nconn *)a_data;
         if(!l_nconn)
         {
                 //NDBG_PRINT("%sWRITEABLE%s ERROR\n", ANSI_COLOR_FG_BLUE, ANSI_COLOR_OFF);
@@ -270,7 +270,7 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
 
         //NDBG_PRINT("%sWRITEABLE%s %p\n", ANSI_COLOR_FG_BLUE, ANSI_COLOR_OFF, l_nconn);
 
-        reqlet *l_reqlet = static_cast<reqlet *>(l_nconn->get_data1());
+        ns_hlx::reqlet *l_reqlet = static_cast<ns_hlx::reqlet *>(l_nconn->get_data1());
 
         int32_t l_status = STATUS_OK;
         l_status = l_nconn->run_state_machine(l_t_client->m_evr_loop, l_reqlet->m_host_info);
@@ -294,7 +294,7 @@ void *t_client::evr_loop_file_writeable_cb(void *a_data)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void *t_client::evr_loop_file_readable_cb(void *a_data)
+void *t_hlp_client::evr_loop_file_readable_cb(void *a_data)
 {
         if(!a_data)
         {
@@ -302,15 +302,15 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
                 return NULL;
         }
 
-        nconn* l_nconn = static_cast<nconn*>(a_data);
+        ns_hlx::nconn* l_nconn = static_cast<ns_hlx::nconn*>(a_data);
         if(!l_nconn)
         {
                 //NDBG_PRINT("%sREADABLE%s ERROR\n", ANSI_COLOR_FG_RED, ANSI_COLOR_OFF);
                 return NULL;
         }
 
-        reqlet *l_reqlet = static_cast<reqlet *>(l_nconn->get_data1());
-        t_client *l_t_client = g_t_client;
+        ns_hlx::reqlet *l_reqlet = static_cast<ns_hlx::reqlet *>(l_nconn->get_data1());
+        t_hlp_client *l_t_client = g_t_client;
 
         //NDBG_PRINT("%sREADABLE%s %p\n", ANSI_COLOR_FG_RED, ANSI_COLOR_OFF, l_nconn);
 
@@ -382,15 +382,15 @@ void *t_client::evr_loop_file_readable_cb(void *a_data)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void *t_client::evr_loop_file_error_cb(void *a_data)
+void *t_hlp_client::evr_loop_file_error_cb(void *a_data)
 {
         if(!a_data)
         {
                 return NULL;
         }
 
-        t_client *l_t_client = g_t_client;
-        nconn *l_nconn = (nconn *)a_data;
+        t_hlp_client *l_t_client = g_t_client;
+        ns_hlx::nconn *l_nconn = (ns_hlx::nconn *)a_data;
         if(!l_nconn)
         {
                 return NULL;
@@ -412,7 +412,7 @@ void *t_client::evr_loop_file_error_cb(void *a_data)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void *t_client::evr_loop_file_timeout_cb(void *a_data)
+void *t_hlp_client::evr_loop_file_timeout_cb(void *a_data)
 {
 
         if(!a_data)
@@ -420,8 +420,8 @@ void *t_client::evr_loop_file_timeout_cb(void *a_data)
                 return NULL;
         }
 
-        t_client *l_t_client = g_t_client;
-        nconn *l_nconn = (nconn *)a_data;
+        t_hlp_client *l_t_client = g_t_client;
+        ns_hlx::nconn *l_nconn = (ns_hlx::nconn *)a_data;
         if(!l_nconn)
         {
                 return NULL;
@@ -455,7 +455,7 @@ void *t_client::evr_loop_file_timeout_cb(void *a_data)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-nconn *t_client::try_take_locked_nconn_w_hash(uint64_t a_hash)
+ns_hlx::nconn *t_hlp_client::try_take_locked_nconn_w_hash(uint64_t a_hash)
 {
 
         //NDBG_PRINT("ID[%" PRIu64 "]\n", a_hash);
@@ -494,15 +494,15 @@ nconn *t_client::try_take_locked_nconn_w_hash(uint64_t a_hash)
         }
         else
         {
-                nconn *l_nconn = NULL;
+                ns_hlx::nconn *l_nconn = NULL;
 
                 // Assume tcp -fix later
-                l_nconn = new nconn_tcp(m_verbose, m_color, -1, false, false);
+                l_nconn = new ns_hlx::nconn_tcp(m_verbose, m_color, -1, false, false);
 
                 // Set generic options
-                HLP_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_RECV_BUF_SIZE, NULL, m_sock_opt_recv_buf_size);
-                HLP_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_SEND_BUF_SIZE, NULL, m_sock_opt_send_buf_size);
-                HLP_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_NO_DELAY, NULL, m_sock_opt_no_delay);
+                HLP_SET_NCONN_OPT((*l_nconn), ns_hlx::nconn_tcp::OPT_TCP_RECV_BUF_SIZE, NULL, m_sock_opt_recv_buf_size);
+                HLP_SET_NCONN_OPT((*l_nconn), ns_hlx::nconn_tcp::OPT_TCP_SEND_BUF_SIZE, NULL, m_sock_opt_send_buf_size);
+                HLP_SET_NCONN_OPT((*l_nconn), ns_hlx::nconn_tcp::OPT_TCP_NO_DELAY, NULL, m_sock_opt_no_delay);
 
                 l_nconn_lock.m_nconn = l_nconn;
                 pthread_mutex_init(&l_nconn_lock.m_mutex, NULL);
@@ -527,7 +527,7 @@ nconn *t_client::try_take_locked_nconn_w_hash(uint64_t a_hash)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void t_client::give_lock(uint64_t a_id)
+void t_hlp_client::give_lock(uint64_t a_id)
 {
 
 }
@@ -537,7 +537,7 @@ void t_client::give_lock(uint64_t a_id)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void *t_client::evr_loop_timer_cb(void *a_data)
+void *t_hlp_client::evr_loop_timer_cb(void *a_data)
 {
 
         //NDBG_PRINT("%sHERE%s: \n", ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF);
@@ -545,7 +545,7 @@ void *t_client::evr_loop_timer_cb(void *a_data)
         // Get refs
         client_pb_cmd_t *l_client_pb_cmd = static_cast<client_pb_cmd_t *>(a_data);
         pb_cmd_t *l_pb_cmd = l_client_pb_cmd->m_pb_cmd;
-        t_client *l_t_client = l_client_pb_cmd->m_t_client;
+        t_hlp_client *l_t_client = l_client_pb_cmd->m_t_client;
 
         // Stats
         ++(l_t_client->m_num_cmds_serviced);
@@ -555,7 +555,7 @@ void *t_client::evr_loop_timer_cb(void *a_data)
         l_cmd_hash = get_cmd_hash(*l_pb_cmd);
 
         // Try take
-        nconn *l_nconn = NULL;
+        ns_hlx::nconn *l_nconn = NULL;
         l_nconn = l_t_client->try_take_locked_nconn_w_hash(l_cmd_hash);
         if(NULL == l_nconn)
         {
@@ -588,7 +588,7 @@ void *t_client::evr_loop_timer_cb(void *a_data)
                 // ---------------------------------------
                 // Get reqlet
                 // ---------------------------------------
-                reqlet *l_reqlet = NULL;
+                ns_hlx::reqlet *l_reqlet = NULL;
                 l_reqlet = l_t_client->evoke_reqlet(*l_pb_cmd);
                 if(!l_reqlet)
                 {
@@ -726,35 +726,33 @@ void *t_client::evr_loop_timer_cb(void *a_data)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-nconn *t_client::create_new_nconn(const reqlet &a_reqlet)
+ns_hlx::nconn *t_hlp_client::create_new_nconn(const ns_hlx::reqlet &a_reqlet)
 {
-        nconn *l_nconn = NULL;
-
-
-        if(a_reqlet.m_url.m_scheme == nconn::SCHEME_TCP)
+        ns_hlx::nconn *l_nconn = NULL;
+        if(a_reqlet.m_url.m_scheme == ns_hlx::nconn::SCHEME_TCP)
         {
                 // TODO SET OPTIONS!!!
-                l_nconn = new nconn_tcp(m_verbose, m_color, 1, true, false);
+                l_nconn = new ns_hlx::nconn_tcp(m_verbose, m_color, 1, true, false);
         }
-        else if(a_reqlet.m_url.m_scheme == nconn::SCHEME_SSL)
+        else if(a_reqlet.m_url.m_scheme == ns_hlx::nconn::SCHEME_SSL)
         {
                 // TODO SET OPTIONS!!!
-                l_nconn = new nconn_ssl(m_verbose, m_color, 1, true, false);
+                l_nconn = new ns_hlx::nconn_ssl(m_verbose, m_color, 1, true, false);
         }
 
         // -------------------------------------------
         // Set options
         // -------------------------------------------
         // Set generic options
-        HLP_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_RECV_BUF_SIZE, NULL, m_sock_opt_recv_buf_size);
-        HLP_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_SEND_BUF_SIZE, NULL, m_sock_opt_send_buf_size);
-        HLP_SET_NCONN_OPT((*l_nconn), nconn_tcp::OPT_TCP_NO_DELAY, NULL, m_sock_opt_no_delay);
+        HLP_SET_NCONN_OPT((*l_nconn), ns_hlx::nconn_tcp::OPT_TCP_RECV_BUF_SIZE, NULL, m_sock_opt_recv_buf_size);
+        HLP_SET_NCONN_OPT((*l_nconn), ns_hlx::nconn_tcp::OPT_TCP_SEND_BUF_SIZE, NULL, m_sock_opt_send_buf_size);
+        HLP_SET_NCONN_OPT((*l_nconn), ns_hlx::nconn_tcp::OPT_TCP_NO_DELAY, NULL, m_sock_opt_no_delay);
 
         // Set ssl options
-        if(a_reqlet.m_url.m_scheme == nconn::SCHEME_SSL)
+        if(a_reqlet.m_url.m_scheme == ns_hlx::nconn::SCHEME_SSL)
         {
-                HLP_SET_NCONN_OPT((*l_nconn), nconn_ssl::OPT_SSL_CIPHER_STR, m_cipher_str.c_str(), m_cipher_str.length());
-                HLP_SET_NCONN_OPT((*l_nconn), nconn_ssl::OPT_SSL_CTX, m_ssl_ctx, sizeof(m_ssl_ctx));
+                HLP_SET_NCONN_OPT((*l_nconn), ns_hlx::nconn_ssl::OPT_SSL_CIPHER_STR, m_cipher_str.c_str(), m_cipher_str.length());
+                HLP_SET_NCONN_OPT((*l_nconn), ns_hlx::nconn_ssl::OPT_SSL_CTX, m_ssl_ctx, sizeof(m_ssl_ctx));
         }
 
         return l_nconn;
@@ -767,7 +765,7 @@ nconn *t_client::create_new_nconn(const reqlet &a_reqlet)
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
 #define REQLET_MAX_URL_LEN 1024
-reqlet *t_client::evoke_reqlet(const pb_cmd_t &a_cmd)
+ns_hlx::reqlet *t_hlp_client::evoke_reqlet(const pb_cmd_t &a_cmd)
 {
         char l_url[REQLET_MAX_URL_LEN];
 
@@ -788,11 +786,11 @@ reqlet *t_client::evoke_reqlet(const pb_cmd_t &a_cmd)
         }
 
         // Create reqlet
-        reqlet *l_reqlet = new reqlet(m_reqlet_map.size(), -1);
+        ns_hlx::reqlet *l_reqlet = new ns_hlx::reqlet(m_reqlet_map.size(), -1);
         std::string l_url_str = l_url;
         l_reqlet->init_with_url(l_url_str);
 
-        resolver l_resolver;
+        ns_hlx::resolver l_resolver;
         l_resolver.init();
 
         l_reqlet->resolve(l_resolver);
@@ -830,11 +828,11 @@ uint64_t get_cmd_hash(const pb_cmd_t &a_cmd)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void *t_client::t_run(void *a_nothing)
+void *t_hlp_client::t_run(void *a_nothing)
 {
 
         // Set start time
-        m_start_time_s = get_time_s();
+        m_start_time_s = ns_hlx::get_time_s();
 
         // Set thread local
         g_t_client = this;
@@ -842,7 +840,7 @@ void *t_client::t_run(void *a_nothing)
         // -------------------------------------------
         // Main loop.
         // -------------------------------------------
-        //NDBG_PRINT("starting main loop: m_run_time_s: %d start_time_s: %" PRIu64 "\n", m_run_time_s, get_time_s() - m_start_time_s);
+        //NDBG_PRINT("starting main loop: m_run_time_s: %d start_time_s: %" PRIu64 "\n", m_run_time_s, ns_hlx::get_time_s() - m_start_time_s);
         while(!m_stopped)
         {
                 m_evr_loop->run();
@@ -859,10 +857,10 @@ void *t_client::t_run(void *a_nothing)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void *t_client::t_run_cmd(void *a_nothing)
+void *t_hlp_client::t_run_cmd(void *a_nothing)
 {
         // Set start time
-        m_start_time_s = get_time_s();
+        m_start_time_s = ns_hlx::get_time_s();
 
         while(!m_run_cmd_stopped)
         {
@@ -890,17 +888,17 @@ void *t_client::t_run_cmd(void *a_nothing)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t t_client::create_request(nconn &ao_conn,
-                reqlet &a_reqlet,
+int32_t t_hlp_client::create_request(ns_hlx::nconn &ao_conn,
+                ns_hlx::reqlet &a_reqlet,
                 const pb_cmd_t &a_cmd)
 {
 
         // Get client
         char *l_req_buf = NULL;
         uint32_t l_req_buf_len = 0;
-        uint32_t l_max_buf_len = nconn_tcp::m_max_req_buf;
+        uint32_t l_max_buf_len = ns_hlx::nconn_tcp::m_max_req_buf;
 
-        GET_NCONN_OPT(ao_conn, nconn_tcp::OPT_TCP_REQ_BUF, (void **)(&l_req_buf), &l_req_buf_len);
+        GET_NCONN_OPT(ao_conn, ns_hlx::nconn_tcp::OPT_TCP_REQ_BUF, (void **)(&l_req_buf), &l_req_buf_len);
 
         // -------------------------------------------
         // Request.
@@ -951,7 +949,7 @@ int32_t t_client::create_request(nconn &ao_conn,
         l_req_buf_len += snprintf(l_req_buf + l_req_buf_len, l_max_buf_len - l_req_buf_len, "\r\n");
 
         // Set len
-        SET_NCONN_OPT(ao_conn, nconn_tcp::OPT_TCP_REQ_BUF_LEN, NULL, l_req_buf_len);
+        SET_NCONN_OPT(ao_conn, ns_hlx::nconn_tcp::OPT_TCP_REQ_BUF_LEN, NULL, l_req_buf_len);
         return STATUS_OK;
 }
 
@@ -961,7 +959,7 @@ int32_t t_client::create_request(nconn &ao_conn,
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t t_client::cleanup_connection(nconn *a_nconn, bool a_cancel_timer)
+int32_t t_hlp_client::cleanup_connection(ns_hlx::nconn *a_nconn, bool a_cancel_timer)
 {
         // Cancel last timer
         if(a_cancel_timer)
@@ -983,7 +981,7 @@ int32_t t_client::cleanup_connection(nconn *a_nconn, bool a_cancel_timer)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t t_client::reassign_nconn(nconn *a_nconn, uint64_t a_new_id)
+int32_t t_hlp_client::reassign_nconn(ns_hlx::nconn *a_nconn, uint64_t a_new_id)
 {
         uint64_t l_old_id = a_nconn->get_id();
         //NDBG_PRINT("OLD_ID[%" PRIu64 "] --> NEW_ID[%" PRIu64 "]\n", l_old_id, a_new_id);
@@ -1017,7 +1015,7 @@ int32_t t_client::reassign_nconn(nconn *a_nconn, uint64_t a_new_id)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t t_client::remove_nconn(nconn *a_nconn)
+int32_t t_hlp_client::remove_nconn(ns_hlx::nconn *a_nconn)
 {
 
         //NDBG_PRINT("REMOVING\n");
@@ -1045,7 +1043,7 @@ int32_t t_client::remove_nconn(nconn *a_nconn)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-nconn *t_client::get_locked_conn(uint64_t a_id)
+ns_hlx::nconn *t_hlp_client::get_locked_conn(uint64_t a_id)
 {
         // TODO REMOVE
         //NDBG_PRINT("%sGET_LOCK%s: a_fd: %" PRIu64 "\n", ANSI_COLOR_BG_BLUE, ANSI_COLOR_OFF, a_id);
@@ -1072,7 +1070,7 @@ nconn *t_client::get_locked_conn(uint64_t a_id)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void t_client::get_stats_copy(tag_stat_map_t &ao_tag_stat_map)
+void t_hlp_client::get_stats_copy(ns_hlx::tag_stat_map_t &ao_tag_stat_map)
 {
         // TODO Need to make this threadsafe -spinlock perhaps...
         for(reqlet_map_t::iterator i_reqlet = m_reqlet_map.begin(); i_reqlet != m_reqlet_map.end(); ++i_reqlet)
@@ -1087,7 +1085,7 @@ void t_client::get_stats_copy(tag_stat_map_t &ao_tag_stat_map)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void t_client::show_stats(void)
+void t_hlp_client::show_stats(void)
 {
 
         NDBG_OUTPUT("* %sSTATS%s: fins: %lu gets: %lu conn_created: %lu deleted: %lu reused: %lu\n",
@@ -1123,7 +1121,7 @@ void t_client::show_stats(void)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void t_client::add_pb_cmd(const pb_cmd_t &a_cmd)
+void t_hlp_client::add_pb_cmd(const pb_cmd_t &a_cmd)
 {
         client_pb_cmd_t *l_client_pb_cmd = new client_pb_cmd_t();
         l_client_pb_cmd->m_pb_cmd = new pb_cmd_t(a_cmd);
@@ -1133,7 +1131,7 @@ void t_client::add_pb_cmd(const pb_cmd_t &a_cmd)
         l_ms = (uint64_t)((double)(a_cmd.m_timestamp_ms - m_first_timestamp_ms))/m_scale;
 
         // Slow down feeder if too far ahead -memory optimization
-        while((get_time_s() - m_start_time_s + 60) < (l_ms/1000))
+        while((ns_hlx::get_time_s() - m_start_time_s + 60) < (l_ms/1000))
         {
                 sleep(1);
         }

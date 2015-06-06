@@ -26,10 +26,10 @@
 //: ----------------------------------------------------------------------------
 //: Includes
 //: ----------------------------------------------------------------------------
+#include "hlx_client.h"
 #include "parsed_url.h"
 #include "evr.h"
 #include "ndebug.h"
-#include "xstat.h"
 #include "host_info.h"
 #include "req_stat.h"
 
@@ -44,6 +44,8 @@
 //: ----------------------------------------------------------------------------
 //: Fwd' Decls
 //: ----------------------------------------------------------------------------
+namespace ns_hlx {
+
 class conn;
 class resolver;
 
@@ -73,51 +75,6 @@ typedef struct range_struct {
 
 typedef std::vector <std::string> path_substr_vector_t;
 typedef std::vector <range_t> range_vector_t;
-typedef std::map<uint16_t, uint32_t > status_code_count_map_t;
-
-// All Stat Aggregation..
-typedef struct total_stat_agg_struct
-{
-
-        // Stats
-        xstat_t m_stat_us_connect;
-        xstat_t m_stat_us_ssl_connect;
-        xstat_t m_stat_us_first_response;
-        xstat_t m_stat_us_download;
-        xstat_t m_stat_us_end_to_end;
-
-        // Totals
-        uint64_t m_total_bytes;
-        uint64_t m_total_reqs;
-
-        // Client stats
-        uint64_t m_num_conn_started;
-        uint64_t m_num_conn_completed;
-        uint64_t m_num_idle_killed;
-        uint64_t m_num_errors;
-        uint64_t m_num_bytes_read;
-
-        status_code_count_map_t m_status_code_count_map;
-
-        total_stat_agg_struct():
-                m_stat_us_connect(),
-                m_stat_us_ssl_connect(),
-                m_stat_us_first_response(),
-                m_stat_us_download(),
-                m_stat_us_end_to_end(),
-                m_total_bytes(0),
-                m_total_reqs(0),
-                m_num_conn_started(0),
-                m_num_conn_completed(0),
-                m_num_idle_killed(0),
-                m_num_errors(0),
-                m_num_bytes_read(0),
-                m_status_code_count_map()
-        {}
-
-} total_stat_agg_t;
-
-typedef std::map <std::string, total_stat_agg_t> tag_stat_map_t;
 
 //: ----------------------------------------------------------------------------
 //: \details: reqlet
@@ -257,13 +214,11 @@ private:
 //: ----------------------------------------------------------------------------
 //: Prototypes
 //: ----------------------------------------------------------------------------
-// Add stat to agg
-void add_stat_to_agg(total_stat_agg_t &ao_stat_agg, const req_stat_t &a_req_stat);
-void add_to_total_stat_agg(total_stat_agg_t &ao_stat_agg, const total_stat_agg_t &a_add_total_stat);
-
 #if 0
 std::string uri_decode(const std::string & a_src);
 std::string uri_encode(const std::string & a_src);
 #endif
+
+} // ns_hlx
 
 #endif

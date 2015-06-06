@@ -54,6 +54,8 @@
                 } \
         } while(0)
 
+namespace ns_hlx {
+
 //: ----------------------------------------------------------------------------
 //: Fwd Decl's
 //: ----------------------------------------------------------------------------
@@ -675,3 +677,6 @@ int32_t nconn_tcp::set_listening(int32_t a_val)
         m_tcp_state = TCP_STATE_LISTENING;
         return STATUS_OK;
 }
+
+} // ns_hlx
+

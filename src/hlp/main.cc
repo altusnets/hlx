@@ -346,7 +346,7 @@ int main(int argc, char** argv)
                         int32_t l_status;
                         std::string l_header_key;
                         std::string l_header_val;
-                        l_status = break_header_string(l_argument, l_header_key, l_header_val);
+                        l_status = ns_hlx::break_header_string(l_argument, l_header_key, l_header_val);
                         if(l_status != 0)
                         {
                                 printf("Error header string[%s] is malformed\n", l_argument.c_str());
@@ -550,7 +550,7 @@ int main(int argc, char** argv)
                 return -1;
         }
 
-        uint64_t l_start_time_ms = get_time_ms();
+        uint64_t l_start_time_ms = ns_hlx::get_time_ms();
 
         // -------------------------------------------
         // Run command exec
@@ -571,7 +571,7 @@ int main(int argc, char** argv)
         ProfilerStop();
 #endif
 
-        uint64_t l_end_time_ms = get_time_ms() - l_start_time_ms;
+        uint64_t l_end_time_ms = ns_hlx::get_time_ms() - l_start_time_ms;
 
 
         // -------------------------------------------

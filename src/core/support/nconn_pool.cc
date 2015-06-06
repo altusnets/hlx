@@ -288,6 +288,14 @@ int32_t nconn_pool::release(nconn *a_nconn)
                 return STATUS_ERROR;
         }
 
+        // Try release from m_idle_conn_ncache
+        if(m_idle_conn_ncache.size() &&
+           a_nconn->m_data1)
+        {
+                reqlet *l_reqlet = reinterpret_cast<reqlet *>(a_nconn->m_data1);
+                m_idle_conn_ncache.remove(l_reqlet->get_label_hash());
+        }
+
         uint64_t l_conn_id = a_nconn->get_id();
         a_nconn->reset_stats();
         m_conn_free_list.push_back(l_conn_id);

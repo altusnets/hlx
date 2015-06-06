@@ -98,9 +98,9 @@ public:
 
         // Reqlets
         uint32_t m_num_reqlets;
+        uint32_t m_num_resolved;
         uint32_t m_num_get;
         uint32_t m_num_done;
-        uint32_t m_num_resolved;
         uint32_t m_num_error;
 
         // -----------------------------

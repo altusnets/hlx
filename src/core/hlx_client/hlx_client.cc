@@ -1087,13 +1087,6 @@ hlx_client::hlx_client(void):
         m_request_mode(REQUEST_MODE_ROUND_ROBIN),
         m_split_requests_by_thread(true),
 
-        m_start_time_ms(),
-        m_last_display_time_ms(),
-        m_last_stat(NULL),
-
-        // Interval stats
-        m_last_responses_count(),
-
         // Socket options
         m_sock_opt_recv_buf_size(0),
         m_sock_opt_send_buf_size(0),
@@ -1119,11 +1112,9 @@ hlx_client::hlx_client(void):
 
         m_resolver(NULL),
 
-        m_is_initd(false)
+        m_is_initd(false),
+        m_start_time_ms(0)
 {
-        m_last_stat = new total_stat_agg_struct();
-
-        for(uint32_t i = 0; i < 10; ++i) {m_last_responses_count[i] = 0;}
 
 };
 
@@ -1166,12 +1157,6 @@ hlx_client::~hlx_client(void)
 
         // TODO Deprecated???
         //EVP_cleanup();
-
-        if(m_last_stat)
-        {
-                delete m_last_stat;
-                m_last_stat = NULL;
-        }
 
         if(m_req_body)
         {
@@ -1539,168 +1524,6 @@ int hlx_client::init(void)
 
 }
 
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-static void show_total_agg_stat(std::string &a_tag,
-        const total_stat_agg_t &a_stat,
-        double a_time_elapsed_s,
-        uint32_t a_max_parallel,
-        bool a_color)
-{
-        if(a_color)
-        printf("| %sRESULTS%s:             %s%s%s\n", ANSI_COLOR_FG_CYAN, ANSI_COLOR_OFF, ANSI_COLOR_FG_YELLOW, a_tag.c_str(), ANSI_COLOR_OFF);
-        else
-        printf("| RESULTS:             %s\n", a_tag.c_str());
-
-        printf("| fetches:             %lu\n", a_stat.m_total_reqs);
-        printf("| max parallel:        %u\n", a_max_parallel);
-        printf("| bytes:               %e\n", (double)a_stat.m_total_bytes);
-        printf("| seconds:             %f\n", a_time_elapsed_s);
-        printf("| mean bytes/conn:     %f\n", ((double)a_stat.m_total_bytes)/((double)a_stat.m_total_reqs));
-        printf("| fetches/sec:         %f\n", ((double)a_stat.m_total_reqs)/(a_time_elapsed_s));
-        printf("| bytes/sec:           %e\n", ((double)a_stat.m_total_bytes)/a_time_elapsed_s);
-
-        // TODO Fix stdev/var calcs
-#if 0
-#define SHOW_XSTAT_LINE(_tag, stat)\
-        do {\
-        printf("| %-16s %12.6f mean, %12.6f max, %12.6f min, %12.6f stdev, %12.6f var\n",\
-               _tag,                                                    \
-               stat.mean()/1000.0,                                      \
-               stat.max()/1000.0,                                       \
-               stat.min()/1000.0,                                       \
-               stat.stdev()/1000.0,                                     \
-               stat.var()/1000.0);                                      \
-        } while(0)
-#else
-#define SHOW_XSTAT_LINE(_tag, stat)\
-        do {\
-        printf("| %-16s %12.6f mean, %12.6f max, %12.6f min\n",\
-               _tag,\
-               stat.mean()/1000.0,\
-               stat.max()/1000.0,\
-               stat.min()/1000.0);\
-        } while(0)
-#endif
-
-        SHOW_XSTAT_LINE("ms/connect:", a_stat.m_stat_us_connect);
-        SHOW_XSTAT_LINE("ms/1st-response:", a_stat.m_stat_us_first_response);
-        //SHOW_XSTAT_LINE("ms/download:", a_stat.m_stat_us_download);
-        SHOW_XSTAT_LINE("ms/end2end:", a_stat.m_stat_us_end_to_end);
-
-        if(a_color)
-                printf("| %sHTTP response codes%s: \n", ANSI_COLOR_FG_GREEN, ANSI_COLOR_OFF);
-        else
-                printf("| HTTP response codes: \n");
-
-        for(status_code_count_map_t::const_iterator i_status_code = a_stat.m_status_code_count_map.begin();
-                        i_status_code != a_stat.m_status_code_count_map.end();
-                ++i_status_code)
-        {
-                if(a_color)
-                printf("| %s%3d%s -- %u\n", ANSI_COLOR_FG_MAGENTA, i_status_code->first, ANSI_COLOR_OFF, i_status_code->second);
-                else
-                printf("| %3d -- %u\n", i_status_code->first, i_status_code->second);
-        }
-
-        // Done flush...
-        printf("\n");
-
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-void hlx_client::display_results(double a_elapsed_time,
-                                 bool a_show_breakdown_flag)
-{
-
-        tag_stat_map_t l_tag_stat_map;
-        total_stat_agg_t l_total;
-
-        // Get stats
-        get_stats(l_total, a_show_breakdown_flag, l_tag_stat_map);
-
-        std::string l_tag;
-        // TODO Fix elapse and max parallel
-        l_tag = "ALL";
-        show_total_agg_stat(l_tag, l_total, a_elapsed_time, m_num_parallel, m_color);
-
-        // -------------------------------------------
-        // Optional Breakdown
-        // -------------------------------------------
-        if(a_show_breakdown_flag)
-        {
-                for(tag_stat_map_t::iterator i_stat = l_tag_stat_map.begin();
-                                i_stat != l_tag_stat_map.end();
-                                ++i_stat)
-                {
-                        l_tag = i_stat->first;
-                        show_total_agg_stat(l_tag, i_stat->second, a_elapsed_time, m_num_parallel, m_color);
-                }
-        }
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-static void show_total_agg_stat_legacy(std::string &a_tag,
-                                       const total_stat_agg_t &a_stat,
-                                       std::string &a_sep,
-                                       double a_time_elapsed_s,
-                                       uint32_t a_max_parallel)
-{
-        printf("%s: ", a_tag.c_str());
-        printf("%lu fetches, ", a_stat.m_total_reqs);
-        printf("%u max parallel, ", a_max_parallel);
-        printf("%e bytes, ", (double)a_stat.m_total_bytes);
-        printf("in %f seconds, ", a_time_elapsed_s);
-        printf("%s", a_sep.c_str());
-
-        printf("%f mean bytes/connection, ", ((double)a_stat.m_total_bytes)/((double)a_stat.m_total_reqs));
-        printf("%s", a_sep.c_str());
-
-        printf("%f fetches/sec, %e bytes/sec", ((double)a_stat.m_total_reqs)/(a_time_elapsed_s), ((double)a_stat.m_total_bytes)/a_time_elapsed_s);
-        printf("%s", a_sep.c_str());
-
-#define SHOW_XSTAT_LINE_LEGACY(_tag, stat)\
-        printf("%s %.6f mean, %.6f max, %.6f min, %.6f stdev",\
-               _tag,                                          \
-               stat.mean()/1000.0,                            \
-               stat.max()/1000.0,                             \
-               stat.min()/1000.0,                             \
-               stat.stdev()/1000.0);                          \
-        printf("%s", a_sep.c_str())
-
-        SHOW_XSTAT_LINE_LEGACY("msecs/connect:", a_stat.m_stat_us_connect);
-        SHOW_XSTAT_LINE_LEGACY("msecs/first-response:", a_stat.m_stat_us_first_response);
-        //SHOW_XSTAT_LINE_LEGACY("msecs/download:", a_stat.m_stat_us_download);
-        SHOW_XSTAT_LINE_LEGACY("msecs/end2end:", a_stat.m_stat_us_end_to_end);
-
-        printf("HTTP response codes: ");
-        if(a_sep == "\n")
-                printf("%s", a_sep.c_str());
-
-        for(status_code_count_map_t::const_iterator i_status_code = a_stat.m_status_code_count_map.begin();
-                        i_status_code != a_stat.m_status_code_count_map.end();
-                ++i_status_code)
-        {
-                printf("code %d -- %u, ", i_status_code->first, i_status_code->second);
-        }
-
-        // Done flush...
-        printf("\n");
-
-}
-
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
@@ -1708,7 +1531,7 @@ static void show_total_agg_stat_legacy(std::string &a_tag,
 //: ----------------------------------------------------------------------------
 void hlx_client::get_stats(total_stat_agg_t &ao_all_stats,
                            bool a_get_breakdown,
-                           tag_stat_map_t &ao_breakdown_stats)
+                           tag_stat_map_t &ao_breakdown_stats) const
 {
         // -------------------------------------------
         // Aggregate
@@ -1753,48 +1576,6 @@ void hlx_client::get_stats(total_stat_agg_t &ao_all_stats,
 
                 // Add to total
                 add_to_total_stat_agg(ao_all_stats, i_reqlet->second);
-        }
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-void hlx_client::display_results_http_load_style(double a_elapsed_time,
-                                                 bool a_show_breakdown_flag,
-                                                 bool a_one_line_flag)
-{
-
-        tag_stat_map_t l_tag_stat_map;
-        total_stat_agg_t l_total;
-
-        // Get stats
-        get_stats(l_total, a_show_breakdown_flag, l_tag_stat_map);
-
-        std::string l_tag;
-        // Separator
-        std::string l_sep = "\n";
-        if(a_one_line_flag) l_sep = "||";
-
-        // TODO Fix elapse and max parallel
-        l_tag = "State";
-        show_total_agg_stat_legacy(l_tag, l_total, l_sep, a_elapsed_time, m_num_parallel);
-
-        // -------------------------------------------
-        // Optional Breakdown
-        // -------------------------------------------
-        if(a_show_breakdown_flag)
-        {
-                for(tag_stat_map_t::iterator i_stat = l_tag_stat_map.begin();
-                                i_stat != l_tag_stat_map.end();
-                                ++i_stat)
-                {
-                        l_tag = "[";
-                        l_tag += i_stat->first;
-                        l_tag += "]";
-                        show_total_agg_stat_legacy(l_tag, i_stat->second, l_sep, a_elapsed_time, m_num_parallel);
-                }
         }
 }
 
@@ -1849,407 +1630,29 @@ int32_t hlx_client::get_stats_json(char *l_json_buf, uint32_t l_json_buf_max_len
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void hlx_client::display_results_line_desc(void)
+void total_stat_agg_struct::clear(void)
 {
-        printf("+-----------/-----------+-----------+-----------+--------------+-----------+-------------+-----------+\n");
-        if(m_color)
-        {
-        printf("| %s%9s%s / %s%9s%s | %s%9s%s | %s%9s%s | %s%12s%s | %9s | %11s | %9s |\n",
-                        ANSI_COLOR_FG_GREEN, "Cmpltd", ANSI_COLOR_OFF,
-                        ANSI_COLOR_FG_BLUE, "Total", ANSI_COLOR_OFF,
-                        ANSI_COLOR_FG_MAGENTA, "IdlKil", ANSI_COLOR_OFF,
-                        ANSI_COLOR_FG_RED, "Errors", ANSI_COLOR_OFF,
-                        ANSI_COLOR_FG_YELLOW, "kBytes Recvd", ANSI_COLOR_OFF,
-                        "Elapsed",
-                        "Req/s",
-                        "MB/s");
-        }
-        else
-        {
-                printf("| %9s / %9s | %9s | %9s | %12s | %9s | %11s | %9s |\n",
-                                "Cmpltd",
-                                "Total",
-                                "IdlKil",
-                                "Errors",
-                                "kBytes Recvd",
-                                "Elapsed",
-                                "Req/s",
-                                "MB/s");
-        }
-        printf("+-----------/-----------+-----------+-----------+--------------+-----------+-------------+-----------+\n");
-}
+        // Stats
+        m_stat_us_connect.clear();
+        m_stat_us_connect.clear();
+        m_stat_us_ssl_connect.clear();
+        m_stat_us_first_response.clear();
+        m_stat_us_download.clear();
+        m_stat_us_end_to_end.clear();
 
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-void hlx_client::display_results_line(void)
-{
+        // Totals
+        m_total_bytes = 0;
+        m_total_reqs = 0;
 
-        total_stat_agg_t l_total;
-        tag_stat_map_t l_unused;
-        uint64_t l_cur_time_ms = get_time_ms();
+        // Client stats
+        m_num_resolved = 0;
+        m_num_conn_started = 0;
+        m_num_conn_completed = 0;
+        m_num_idle_killed = 0;
+        m_num_errors = 0;
+        m_num_bytes_read = 0;
 
-        // Get stats
-        get_stats(l_total, false, l_unused);
-
-        double l_reqs_per_s = ((double)(l_total.m_total_reqs - m_last_stat->m_total_reqs)*1000.0) /
-                        ((double)(l_cur_time_ms - m_last_display_time_ms));
-        double l_kb_per_s = ((double)(l_total.m_num_bytes_read - m_last_stat->m_num_bytes_read)*1000.0/1024) /
-                        ((double)(l_cur_time_ms - m_last_display_time_ms));
-        m_last_display_time_ms = get_time_ms();
-        *m_last_stat = l_total;
-
-        if(m_color)
-        {
-                        printf("| %s%9" PRIu64 "%s / %s%9" PRIi64 "%s | %s%9" PRIu64 "%s | %s%9" PRIu64 "%s | %s%12.2f%s | %8.2fs | %10.2fs | %8.2fs |\n",
-                                        ANSI_COLOR_FG_GREEN, l_total.m_total_reqs, ANSI_COLOR_OFF,
-                                        ANSI_COLOR_FG_BLUE, l_total.m_total_reqs, ANSI_COLOR_OFF,
-                                        ANSI_COLOR_FG_MAGENTA, l_total.m_num_idle_killed, ANSI_COLOR_OFF,
-                                        ANSI_COLOR_FG_RED, l_total.m_num_errors, ANSI_COLOR_OFF,
-                                        ANSI_COLOR_FG_YELLOW, ((double)(l_total.m_num_bytes_read))/(1024.0), ANSI_COLOR_OFF,
-                                        ((double)(get_delta_time_ms(m_start_time_ms))) / 1000.0,
-                                        l_reqs_per_s,
-                                        l_kb_per_s/1024.0
-                                        );
-        }
-        else
-        {
-                printf("| %9" PRIu64 " / %9" PRIi64 " | %9" PRIu64 " | %9" PRIu64 " | %12.2f | %8.2fs | %10.2fs | %8.2fs |\n",
-                                l_total.m_total_reqs,
-                                l_total.m_total_reqs,
-                                l_total.m_num_idle_killed,
-                                l_total.m_num_errors,
-                                ((double)(l_total.m_num_bytes_read))/(1024.0),
-                                ((double)(get_delta_time_ms(m_start_time_ms)) / 1000.0),
-                                l_reqs_per_s,
-                                l_kb_per_s/1024.0
-                                );
-
-        }
-
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-void hlx_client::display_responses_line_desc(bool a_show_per_interval)
-{
-        printf("+-----------+-------------+-----------+-----------+-----------+-----------+-----------+-----------+\n");
-        if(a_show_per_interval)
-        {
-                if(m_color)
-                {
-                printf("| %s%9s%s / %s%11s%s / %s%9s%s / %s%9s%s / %s%9s%s | %s%9s%s | %s%9s%s | %s%9s%s | \n",
-                                ANSI_COLOR_FG_WHITE, "Elapsed", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_WHITE, "Req/s", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_WHITE, "Cmpltd", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_WHITE, "Errors", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_GREEN, "200s %%", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_CYAN, "300s %%", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_MAGENTA, "400s %%", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_RED, "500s %%", ANSI_COLOR_OFF);
-                }
-                else
-                {
-                        printf("| %9s / %11s / %9s / %9s | %9s | %9s | %9s | %9s | \n",
-                                        "Elapsed",
-                                        "Req/s",
-                                        "Cmpltd",
-                                        "Errors",
-                                        "200s %%",
-                                        "300s %%",
-                                        "400s %%",
-                                        "500s %%");
-                }
-        }
-        else
-        {
-                if(m_color)
-                {
-                printf("| %s%9s%s / %s%11s%s / %s%9s%s / %s%9s%s / %s%9s%s | %s%9s%s | %s%9s%s | %s%9s%s | \n",
-                                ANSI_COLOR_FG_WHITE, "Elapsed", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_WHITE, "Req/s", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_WHITE, "Cmpltd", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_WHITE, "Errors", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_GREEN, "200s", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_CYAN, "300s", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_MAGENTA, "400s", ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_RED, "500s", ANSI_COLOR_OFF);
-                }
-                else
-                {
-                        printf("| %9s / %11s / %9s / %9s | %9s | %9s | %9s | %9s | \n",
-                                        "Elapsed",
-                                        "Req/s",
-                                        "Cmpltd",
-                                        "Errors",
-                                        "200s",
-                                        "300s",
-                                        "400s",
-                                        "500s");
-                }
-        }
-        printf("+-----------+-------------+-----------+-----------+-----------+-----------+-----------+-----------+\n");
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-void hlx_client::display_responses_line(bool a_show_per_interval)
-{
-
-        total_stat_agg_t l_total;
-        tag_stat_map_t l_unused;
-        uint64_t l_cur_time_ms = get_time_ms();
-
-        // Get stats
-        get_stats(l_total, false, l_unused);
-
-        double l_reqs_per_s = ((double)(l_total.m_total_reqs - m_last_stat->m_total_reqs)*1000.0) /
-                              ((double)(l_cur_time_ms - m_last_display_time_ms));
-        m_last_display_time_ms = get_time_ms();
-        *m_last_stat = l_total;
-
-        // Aggregate over status code map
-        status_code_count_map_t m_status_code_count_map;
-
-        uint32_t l_responses[10] = {0};
-        for(status_code_count_map_t::iterator i_code = l_total.m_status_code_count_map.begin();
-            i_code != l_total.m_status_code_count_map.end();
-            ++i_code)
-        {
-                if(i_code->first >= 200 && i_code->first <= 299)
-                {
-                        l_responses[2] += i_code->second;
-                }
-                else if(i_code->first >= 300 && i_code->first <= 399)
-                {
-                        l_responses[3] += i_code->second;
-                }
-                else if(i_code->first >= 400 && i_code->first <= 499)
-                {
-                        l_responses[4] += i_code->second;
-                }
-                else if(i_code->first >= 500 && i_code->first <= 599)
-                {
-                        l_responses[5] += i_code->second;
-                }
-        }
-
-        if(a_show_per_interval)
-        {
-
-                // Calculate rates
-                double l_rate[10] = {0.0};
-                uint32_t l_totals = 0;
-
-                for(uint32_t i = 2; i <= 5; ++i)
-                {
-                        l_totals += l_responses[i] - m_last_responses_count[i];
-                }
-
-                for(uint32_t i = 2; i <= 5; ++i)
-                {
-                        if(l_totals)
-                        {
-                                l_rate[i] = (100.0*((double)(l_responses[i] - m_last_responses_count[i]))) / ((double)(l_totals));
-                        }
-                        else
-                        {
-                                l_rate[i] = 0.0;
-                        }
-                }
-
-                if(m_color)
-                {
-                                printf("| %8.2fs / %10.2fs / %9" PRIu64 " / %9" PRIu64 " / %s%9.2f%s | %s%9.2f%s | %s%9.2f%s | %s%9.2f%s |\n",
-                                                ((double)(get_delta_time_ms(m_start_time_ms))) / 1000.0,
-                                                l_reqs_per_s,
-                                                l_total.m_total_reqs,
-                                                l_total.m_num_errors,
-                                                ANSI_COLOR_FG_GREEN, l_rate[2], ANSI_COLOR_OFF,
-                                                ANSI_COLOR_FG_CYAN, l_rate[3], ANSI_COLOR_OFF,
-                                                ANSI_COLOR_FG_MAGENTA, l_rate[4], ANSI_COLOR_OFF,
-                                                ANSI_COLOR_FG_RED, l_rate[5], ANSI_COLOR_OFF);
-                }
-                else
-                {
-                        printf("| %8.2fs / %10.2fs / %9" PRIu64 " / %9" PRIu64 " / %9.2f | %9.2f | %9.2f | %9.2f |\n",
-                                        ((double)(get_delta_time_ms(m_start_time_ms))) / 1000.0,
-                                        l_reqs_per_s,
-                                        l_total.m_total_reqs,
-                                        l_total.m_num_errors,
-                                        l_rate[2],
-                                        l_rate[3],
-                                        l_rate[4],
-                                        l_rate[5]);
-                }
-
-                // Update last
-                m_last_responses_count[2] = l_responses[2];
-                m_last_responses_count[3] = l_responses[3];
-                m_last_responses_count[4] = l_responses[4];
-                m_last_responses_count[5] = l_responses[5];
-        }
-        else
-        {
-                if(m_color)
-                {
-                                printf("| %8.2fs / %10.2fs / %9" PRIu64 " / %9" PRIu64 " / %s%9u%s | %s%9u%s | %s%9u%s | %s%9u%s |\n",
-                                                ((double)(get_delta_time_ms(m_start_time_ms))) / 1000.0,
-                                                l_reqs_per_s,
-                                                l_total.m_total_reqs,
-                                                l_total.m_num_errors,
-                                                ANSI_COLOR_FG_GREEN, l_responses[2], ANSI_COLOR_OFF,
-                                                ANSI_COLOR_FG_CYAN, l_responses[3], ANSI_COLOR_OFF,
-                                                ANSI_COLOR_FG_MAGENTA, l_responses[4], ANSI_COLOR_OFF,
-                                                ANSI_COLOR_FG_RED, l_responses[5], ANSI_COLOR_OFF);
-                }
-                else
-                {
-                        printf("| %8.2fs / %10.2fs / %9" PRIu64 " / %9" PRIu64 " / %9u | %9u | %9u | %9u |\n",
-                                        ((double)(get_delta_time_ms(m_start_time_ms))) / 1000.0,
-                                        l_reqs_per_s,
-                                        l_total.m_total_reqs,
-                                        l_total.m_num_errors,
-                                        l_responses[2],
-                                        l_responses[3],
-                                        l_responses[4],
-                                        l_responses[5]);
-                }
-        }
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-void hlx_client::display_summary(bool a_color)
-{
-        std::string l_header_str = "";
-        std::string l_protocol_str = "";
-        std::string l_cipher_str = "";
-        std::string l_off_color = "";
-
-        if(a_color)
-        {
-                l_header_str = ANSI_COLOR_FG_CYAN;
-                l_protocol_str = ANSI_COLOR_FG_GREEN;
-                l_cipher_str = ANSI_COLOR_FG_YELLOW;
-                l_off_color = ANSI_COLOR_OFF;
-        }
-
-        // -------------------------------------------------
-        // Get results from clients
-        // -------------------------------------------------
-        uint32_t l_num_reqlets = 0;
-        uint32_t l_summary_success = 0;
-        uint32_t l_summary_error_addr = 0;
-        uint32_t l_summary_error_conn = 0;
-        uint32_t l_summary_error_unknown = 0;
-        uint32_t l_summary_ssl_error_self_signed = 0;
-        uint32_t l_summary_ssl_error_expired = 0;
-        uint32_t l_summary_ssl_error_other = 0;
-        summary_map_t l_summary_ssl_protocols;
-        summary_map_t l_summary_ssl_ciphers;
-
-        for(t_client_list_t::const_iterator i_client = m_t_client_list.begin();
-           i_client != m_t_client_list.end();
-           ++i_client)
-        {
-                l_num_reqlets += (*i_client)->m_num_reqlets;
-                l_summary_success += (*i_client)->m_summary_success;
-                l_summary_error_addr += (*i_client)->m_summary_error_addr;
-                l_summary_error_conn += (*i_client)->m_summary_error_conn;
-                l_summary_error_unknown += (*i_client)->m_summary_error_unknown;
-                l_summary_ssl_error_self_signed += (*i_client)->m_summary_ssl_error_self_signed;
-                l_summary_ssl_error_expired += (*i_client)->m_summary_ssl_error_expired;
-                l_summary_ssl_error_other += (*i_client)->m_summary_ssl_error_other;
-                l_summary_ssl_protocols.insert((*i_client)->m_summary_ssl_protocols.begin(),
-                                               (*i_client)->m_summary_ssl_protocols.end());
-                l_summary_ssl_ciphers.insert((*i_client)->m_summary_ssl_ciphers.begin(),
-                                             (*i_client)->m_summary_ssl_ciphers.end());
-
-        }
-
-
-        NDBG_OUTPUT("****************** %sSUMMARY%s ****************** \n", l_header_str.c_str(), l_off_color.c_str());
-        NDBG_OUTPUT("| total hosts:                     %u\n",l_num_reqlets);
-        NDBG_OUTPUT("| success:                         %u\n",l_summary_success);
-        NDBG_OUTPUT("| error address lookup:            %u\n",l_summary_error_addr);
-        NDBG_OUTPUT("| error connectivity:              %u\n",l_summary_error_conn);
-        NDBG_OUTPUT("| error unknown:                   %u\n",l_summary_error_unknown);
-        NDBG_OUTPUT("| ssl error cert expired           %u\n",l_summary_ssl_error_expired);
-        NDBG_OUTPUT("| ssl error cert self-signed       %u\n",l_summary_ssl_error_self_signed);
-        NDBG_OUTPUT("| ssl error other                  %u\n",l_summary_ssl_error_other);
-
-        // Sort
-        typedef std::map<uint32_t, std::string> _sorted_map_t;
-        _sorted_map_t l_sorted_map;
-        NDBG_OUTPUT("+--------------- %sSSL PROTOCOLS%s -------------- \n", l_protocol_str.c_str(), l_off_color.c_str());
-        l_sorted_map.clear();
-        for(summary_map_t::iterator i_s = l_summary_ssl_protocols.begin(); i_s != l_summary_ssl_protocols.end(); ++i_s)
-        l_sorted_map[i_s->second] = i_s->first;
-        for(_sorted_map_t::reverse_iterator i_s = l_sorted_map.rbegin(); i_s != l_sorted_map.rend(); ++i_s)
-        NDBG_OUTPUT("| %-32s %u\n", i_s->second.c_str(), i_s->first);
-        NDBG_OUTPUT("+--------------- %sSSL CIPHERS%s ---------------- \n", l_cipher_str.c_str(), l_off_color.c_str());
-        l_sorted_map.clear();
-        for(summary_map_t::iterator i_s = l_summary_ssl_ciphers.begin(); i_s != l_summary_ssl_ciphers.end(); ++i_s)
-        l_sorted_map[i_s->second] = i_s->first;
-        for(_sorted_map_t::reverse_iterator i_s = l_sorted_map.rbegin(); i_s != l_sorted_map.rend(); ++i_s)
-        NDBG_OUTPUT("| %-32s %u\n", i_s->second.c_str(), i_s->first);
-
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-void hlx_client::display_status_line(bool a_color)
-{
-
-        // -------------------------------------------------
-        // Get results from clients
-        // -------------------------------------------------
-        uint32_t l_num_reqlets = 0;
-        uint32_t l_num_get = 0;
-        uint32_t l_num_done = 0;
-        uint32_t l_num_resolved = 0;
-        uint32_t l_num_error = 0;
-
-        for(t_client_list_t::const_iterator i_client = m_t_client_list.begin();
-           i_client != m_t_client_list.end();
-           ++i_client)
-        {
-                l_num_reqlets += (*i_client)->m_num_reqlets;
-                l_num_get += (*i_client)->m_num_get;
-                l_num_done += (*i_client)->m_num_done;
-                l_num_resolved += (*i_client)->m_num_resolved;
-                l_num_error += (*i_client)->m_num_error;
-        }
-
-        if(a_color)
-        {
-                printf("Done/Resolved/Req'd/Total/Error %s%8u%s / %s%8u%s / %s%8u%s / %s%8u%s / %s%8u%s\n",
-                                ANSI_COLOR_FG_GREEN, l_num_done, ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_MAGENTA, l_num_resolved, ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_YELLOW, l_num_get, ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_BLUE, l_num_reqlets, ANSI_COLOR_OFF,
-                                ANSI_COLOR_FG_RED, l_num_error, ANSI_COLOR_OFF);
-        }
-        else
-        {
-                printf("Done/Resolved/Req'd/Total/Error %8u / %8u / %8u / %8u / %8u\n",
-                                l_num_done, l_num_resolved, l_num_get, l_num_reqlets, l_num_error);
-        }
+        m_status_code_count_map.clear();
 }
 
 } //namespace ns_hlx {

@@ -30,6 +30,8 @@
 #include <string.h>
 #include <errno.h>
 
+namespace ns_hlx {
+
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: \return:  TODO
@@ -54,10 +56,10 @@ m_epoll_fd(-1)
 //: ----------------------------------------------------------------------------
 int evr_epoll::wait(epoll_event* a_ev, int a_max_events, int a_timeout_msec)
 {
-        NDBG_PRINT("%swait%s = %d a_max_events = %d\n",  ANSI_COLOR_FG_YELLOW, ANSI_COLOR_OFF, a_timeout_msec, a_max_events);
+        //NDBG_PRINT("%swait%s = %d a_max_events = %d\n",  ANSI_COLOR_FG_YELLOW, ANSI_COLOR_OFF, a_timeout_msec, a_max_events);
         int l_epoll_status = 0;
         l_epoll_status = epoll_wait(m_epoll_fd, a_ev, a_max_events, a_timeout_msec);
-        NDBG_PRINT("%swait%s = %d\n",  ANSI_COLOR_BG_YELLOW, ANSI_COLOR_OFF, l_epoll_status);
+        //NDBG_PRINT("%swait%s = %d\n",  ANSI_COLOR_BG_YELLOW, ANSI_COLOR_OFF, l_epoll_status);
         return l_epoll_status;
 }
 
@@ -136,3 +138,6 @@ int evr_epoll::del(int a_fd)
         }
         return STATUS_OK;
 }
+
+} // ns_hlx
+

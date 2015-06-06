@@ -2,7 +2,7 @@
 //: Copyright (C) 2014 Verizon.  All Rights Reserved.
 //: All Rights Reserved
 //:
-//: \file:    t_client.h
+//: \file:    t_hlp_client.h
 //: \details: TODO
 //: \author:  Reed P. Morrison
 //: \date:    02/07/2014
@@ -20,8 +20,8 @@
 //:   limitations under the License.
 //:
 //: ----------------------------------------------------------------------------
-#ifndef _T_CLIENT_H
-#define _T_CLIENT_H
+#ifndef _T_HLP_CLIENT_H
+#define _T_HLP_CLIENT_H
 
 
 //: ----------------------------------------------------------------------------
@@ -109,19 +109,19 @@ typedef struct pb_cmd_struct {
 
 } pb_cmd_t;
 
-class t_client;
+class t_hlp_client;
 typedef struct client_pb_cmd_struct {
         pb_cmd_t *m_pb_cmd;
-        t_client *m_t_client;
+        t_hlp_client *m_t_client;
 } client_pb_cmd_t;
 
 
 typedef struct {
-        nconn *m_nconn;
+        ns_hlx::nconn *m_nconn;
         pthread_mutex_t m_mutex;
 } nconn_lock_t;
 
-typedef std::map <uint64_t, reqlet *> reqlet_map_t;
+typedef std::map <uint64_t, ns_hlx::reqlet *> reqlet_map_t;
 
 // connection types
 typedef std::map<uint64_t, nconn_lock_t> nconn_lock_map_t;
@@ -135,7 +135,7 @@ typedef std::list<nconn_lock_t> nconn_lock_list_t;
 //: ----------------------------------------------------------------------------
 //: \details: TODO
 //: ----------------------------------------------------------------------------
-class t_client
+class t_hlp_client
 {
 public:
 
@@ -143,7 +143,7 @@ public:
         // -------------------------------------------------
         // Public methods
         // -------------------------------------------------
-        t_client(bool a_verbose,
+        t_hlp_client(bool a_verbose,
                 bool a_color,
                 uint32_t a_sock_opt_recv_buf_size,
                 uint32_t a_sock_opt_send_buf_size,
@@ -154,14 +154,14 @@ public:
                 uint32_t a_max_parallel_connections,
                 int32_t a_timeout_s);
 
-        ~t_client();
+        ~t_hlp_client();
 
         int run(void);
         void *t_run(void *a_nothing);
         void *t_run_cmd(void *a_nothing);
         void stop(void) { m_run_cmd_stopped = true; m_stopped = true; }
         bool is_running(void) { return !m_stopped; }
-        void get_stats_copy(tag_stat_map_t &ao_tag_stat_map);
+        void get_stats_copy(ns_hlx::tag_stat_map_t &ao_tag_stat_map);
         void set_scale(float a_scale) {m_scale = a_scale;};
         void set_first_timestamp_ms(uint64_t a_start_time_ms) {m_first_timestamp_ms = a_start_time_ms;};
         void set_timeout_s(int32_t a_val) {m_timeout_s = a_val;}
@@ -169,7 +169,7 @@ public:
         uint32_t get_timeout_s(void) { return m_timeout_s;};
 
         uint32_t get_num_conns(void) { return m_nconn_lock_map.size();}
-        nconn *try_take_locked_nconn_w_hash(uint64_t a_hash);
+        ns_hlx::nconn *try_take_locked_nconn_w_hash(uint64_t a_hash);
         void give_lock(uint64_t a_id);
 
         void show_stats(void);
@@ -178,10 +178,10 @@ public:
         void add_pb_cmd(const pb_cmd_t &a_cmd);
         void set_feeder_done(bool a_state) {m_feeder_done = a_state;}
 
-        reqlet *evoke_reqlet(const pb_cmd_t &a_cmd);
-        int32_t reassign_nconn(nconn *a_nconn, uint64_t a_new_id);
-        int32_t remove_nconn(nconn *a_nconn);
-        nconn *get_locked_conn(uint64_t a_id);
+        ns_hlx::reqlet *evoke_reqlet(const pb_cmd_t &a_cmd);
+        int32_t reassign_nconn(ns_hlx::nconn *a_nconn, uint64_t a_new_id);
+        int32_t remove_nconn(ns_hlx::nconn *a_nconn);
+        ns_hlx::nconn *get_locked_conn(uint64_t a_id);
 
         // -------------------------------------------------
         // Public members
@@ -211,23 +211,23 @@ private:
         // -------------------------------------------------
         // Private methods
         // -------------------------------------------------
-        DISALLOW_COPY_AND_ASSIGN(t_client)
+        DISALLOW_COPY_AND_ASSIGN(t_hlp_client)
 
         //Helper for pthreads
         static void *t_run_static(void *a_context)
         {
-                return reinterpret_cast<t_client *>(a_context)->t_run(NULL);
+                return reinterpret_cast<t_hlp_client *>(a_context)->t_run(NULL);
         }
 
         //Helper for pthreads
         static void *t_run_cmd_static(void *a_context)
         {
-                return reinterpret_cast<t_client *>(a_context)->t_run_cmd(NULL);
+                return reinterpret_cast<t_hlp_client *>(a_context)->t_run_cmd(NULL);
         }
 
-        int32_t cleanup_connection(nconn *a_nconn, bool a_cancel_timer = true);
-        int32_t create_request(nconn &ao_conn, reqlet &a_reqlet, const pb_cmd_t &a_cmd);
-        nconn *create_new_nconn(const reqlet &a_reqlet);
+        int32_t cleanup_connection(ns_hlx::nconn *a_nconn, bool a_cancel_timer = true);
+        int32_t create_request(ns_hlx::nconn &ao_conn, ns_hlx::reqlet &a_reqlet, const pb_cmd_t &a_cmd);
+        ns_hlx::nconn *create_new_nconn(const ns_hlx::reqlet &a_reqlet);
 
         // TODO FIX!!!
         //int32_t delete_rconn_pb(uint64_t a_id);
@@ -264,8 +264,8 @@ private:
         header_map_t m_header_map;
 
         // Get evr_loop
-        evr_loop *m_evr_loop;
-        evr_loop *m_evr_cmd_loop;
+        ns_hlx::evr_loop *m_evr_loop;
+        ns_hlx::evr_loop *m_evr_cmd_loop;
 
         uint64_t m_first_timestamp_ms;
         pthread_mutex_t m_loop_mutex;

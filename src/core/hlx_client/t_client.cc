@@ -70,9 +70,9 @@ t_client::t_client(const settings_struct_t &a_settings,
         m_t_run_thread(),
         m_settings(),
         m_num_reqlets(0),
+        m_num_resolved(0),
         m_num_get(0),
         m_num_done(0),
-        m_num_resolved(0),
         m_num_error(0),
         m_summary_success(0),
         m_summary_error_addr(0),
@@ -174,9 +174,9 @@ t_client::t_client(const settings_struct_t &a_settings,
 //: ----------------------------------------------------------------------------
 void t_client::reset(void)
 {
+        m_num_resolved = 0;
         m_num_get = 0;
         m_num_done = 0;
-        m_num_resolved = 0;
         m_num_error = 0;
         m_summary_success = 0;
         m_summary_error_addr = 0;
@@ -192,6 +192,14 @@ void t_client::reset(void)
         m_start_time_s = 0;
         m_last_get_req_us = 0;
         m_reqlet_vector_idx = 0;
+
+        for(reqlet_vector_t::const_iterator i_reqlet = m_reqlet_vector.begin();
+            i_reqlet != m_reqlet_vector.end();
+            ++i_reqlet)
+        {
+                (*i_reqlet)->m_stat_agg.clear();
+        }
+
 }
 
 //: ----------------------------------------------------------------------------
@@ -463,13 +471,13 @@ reqlet *t_client::try_get_resolved(void)
             l_reqlet->resolve(*m_settings.m_resolver))!= STATUS_OK)
         {
                 // TODO Set response and error
-                ++m_num_resolved;
                 ++m_num_error;
                 append_summary(l_reqlet);
                 return NULL;
         }
 
         ++m_num_resolved;
+        ++l_reqlet->m_stat_agg.m_num_resolved;
         return l_reqlet;
 
 }

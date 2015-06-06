@@ -27,7 +27,7 @@
 #include "ndebug.h"
 #include "hlp.h"
 #include "stats_collector.h"
-#include "t_client.h"
+#include "t_hlp_client.h"
 #include "util.h"
 #include "ssl_util.h"
 
@@ -60,19 +60,19 @@ int32_t hlp::run(const std::string &a_playback_file,
 {
         int32_t l_retval = STATUS_OK;
 
-        stats_collector::get()->set_start_time_ms(get_time_ms());
+        stats_collector::get()->set_start_time_ms(ns_hlx::get_time_ms());
 
         m_playback_file = a_playback_file;
         m_pb_dest_addr = a_pb_dest_addr;
         m_pb_dest_port = a_pb_dest_port;
 
         // -------------------------------------------
-        // Create t_client list...
+        // Create t_hlp_client list...
         // -------------------------------------------
         for(uint32_t i_client_idx = 0; i_client_idx < m_num_threads; ++i_client_idx)
         {
                 // Create/Run playback client
-                t_client *l_t_client = new t_client(m_verbose,
+                t_hlp_client *l_t_hlp_client = new t_hlp_client(m_verbose,
                         m_color,
                         m_sock_opt_recv_buf_size,
                         m_sock_opt_send_buf_size,
@@ -84,9 +84,9 @@ int32_t hlp::run(const std::string &a_playback_file,
                         2048,
                         m_timeout_s);
 
-                l_t_client->set_scale(m_scale);
+                l_t_hlp_client->set_scale(m_scale);
 
-                m_t_client_list.push_back(l_t_client);
+                m_t_client_list.push_back(l_t_hlp_client);
 
         }
 
@@ -287,7 +287,7 @@ void *hlp::t_feed_playback(void *a_nothing)
                                         std::string l_line_str(l_line_buf);
                                         std::string l_key;
                                         std::string l_val;
-                                        break_header_string(l_line_str, l_key, l_val);
+                                        ns_hlx::break_header_string(l_line_str, l_key, l_val);
 
                                         // Remove endlines and leading spaces
                                         l_val.erase(std::remove(l_val.begin(),l_val.end(), '\n'), l_val.end());
