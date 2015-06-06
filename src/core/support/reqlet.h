@@ -138,7 +138,7 @@ public:
         // -------------------------------------------
         parsed_url m_url;
         host_info_t m_host_info;
-        total_stat_agg_t m_stat_agg;
+        t_stat_t m_stat_agg;
 
         // TODO Move headers to kv list type...
         header_map_t m_headers;

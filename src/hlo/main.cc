@@ -92,7 +92,7 @@ typedef struct settings_struct
         // Stats
         uint64_t m_start_time_ms;
         uint64_t m_last_display_time_ms;
-        ns_hlx::total_stat_agg_t *m_last_stat;
+        ns_hlx::t_stat_t *m_last_stat;
 
         // Used for displaying interval stats
         uint32_t m_last_responses_count[10];
@@ -116,7 +116,7 @@ typedef struct settings_struct
                 // Interval stats
                 m_last_responses_count()
         {
-                m_last_stat = new ns_hlx::total_stat_agg_struct();
+                m_last_stat = new ns_hlx::t_stat_struct();
                 for(uint32_t i = 0; i < 10; ++i) {m_last_responses_count[i] = 0;}
         }
 
@@ -1178,7 +1178,7 @@ void display_responses_line_desc(settings_struct &a_settings)
 //: ----------------------------------------------------------------------------
 void display_responses_line(settings_struct &a_settings)
 {
-        ns_hlx::total_stat_agg_t l_total;
+        ns_hlx::t_stat_t l_total;
         ns_hlx::tag_stat_map_t l_unused;
         uint64_t l_cur_time_ms = hlo_get_time_ms();
 
@@ -1343,7 +1343,7 @@ void display_results_line_desc(settings_struct &a_settings)
 void display_results_line(settings_struct &a_settings)
 {
 
-        ns_hlx::total_stat_agg_t l_total;
+        ns_hlx::t_stat_t l_total;
         ns_hlx::tag_stat_map_t l_unused;
         uint64_t l_cur_time_ms = hlo_get_time_ms();
 
@@ -1392,7 +1392,7 @@ void display_results_line(settings_struct &a_settings)
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
 static void show_total_agg_stat(std::string &a_tag,
-        const ns_hlx::total_stat_agg_t &a_stat,
+        const ns_hlx::t_stat_t &a_stat,
         double a_time_elapsed_s,
         uint32_t a_max_parallel,
         bool a_color)
@@ -1467,7 +1467,7 @@ void display_results(settings_struct &a_settings,
                      bool a_show_breakdown_flag)
 {
         ns_hlx::tag_stat_map_t l_tag_stat_map;
-        ns_hlx::total_stat_agg_t l_total;
+        ns_hlx::t_stat_t l_total;
 
         // Get stats
         a_settings.m_hlx_client->get_stats(l_total, a_show_breakdown_flag, l_tag_stat_map);
@@ -1498,7 +1498,7 @@ void display_results(settings_struct &a_settings,
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
 static void show_total_agg_stat_legacy(std::string &a_tag,
-                                       const ns_hlx::total_stat_agg_t &a_stat,
+                                       const ns_hlx::t_stat_t &a_stat,
                                        std::string &a_sep,
                                        double a_time_elapsed_s,
                                        uint32_t a_max_parallel)
@@ -1556,7 +1556,7 @@ void display_results_http_load_style(settings_struct &a_settings,
                                      bool a_one_line_flag)
 {
         ns_hlx::tag_stat_map_t l_tag_stat_map;
-        ns_hlx::total_stat_agg_t l_total;
+        ns_hlx::t_stat_t l_total;
 
         // Get stats
         a_settings.m_hlx_client->get_stats(l_total, a_show_breakdown_flag, l_tag_stat_map);

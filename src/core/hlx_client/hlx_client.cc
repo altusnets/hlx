@@ -1529,7 +1529,7 @@ int hlx_client::init(void)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void hlx_client::get_stats(total_stat_agg_t &ao_all_stats,
+void hlx_client::get_stats(t_stat_t &ao_all_stats,
                            bool a_get_breakdown,
                            tag_stat_map_t &ao_breakdown_stats) const
 {
@@ -1588,7 +1588,7 @@ int32_t hlx_client::get_stats_json(char *l_json_buf, uint32_t l_json_buf_max_len
 {
 
         tag_stat_map_t l_tag_stat_map;
-        total_stat_agg_t l_total;
+        t_stat_t l_total;
 
         uint64_t l_time_ms = get_time_ms();
         // Get stats
@@ -1630,7 +1630,7 @@ int32_t hlx_client::get_stats_json(char *l_json_buf, uint32_t l_json_buf_max_len
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void total_stat_agg_struct::clear(void)
+void t_stat_struct::clear(void)
 {
         // Stats
         m_stat_us_connect.clear();

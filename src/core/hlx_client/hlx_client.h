@@ -148,7 +148,7 @@ typedef struct xstat_struct
 // -----------------------------------------------
 // All Stat Aggregation..
 // -----------------------------------------------
-typedef struct total_stat_agg_struct
+typedef struct t_stat_struct
 {
 
         // Stats
@@ -172,7 +172,7 @@ typedef struct total_stat_agg_struct
 
         status_code_count_map_t m_status_code_count_map;
 
-        total_stat_agg_struct():
+        t_stat_struct():
                 m_stat_us_connect(),
                 m_stat_us_ssl_connect(),
                 m_stat_us_first_response(),
@@ -191,10 +191,10 @@ typedef struct total_stat_agg_struct
 
         void clear();
 
-} total_stat_agg_t;
+} t_stat_t;
 
-typedef std::map <std::string, total_stat_agg_t> tag_stat_map_t;
-typedef std::map <std::string, total_stat_agg_t> tag_stat_map_t;
+typedef std::map <std::string, t_stat_t> tag_stat_map_t;
+typedef std::map <std::string, t_stat_t> tag_stat_map_t;
 typedef std::list <host_t> host_list_t;
 typedef std::list <std::string> server_list_t;
 typedef std::map <std::string, uint32_t> summary_map_t;
@@ -292,7 +292,7 @@ public:
                                        output_type_t a_output_type,
                                        int a_part_map);
 
-        void get_stats(total_stat_agg_t &ao_all_stats,
+        void get_stats(t_stat_t &ao_all_stats,
                        bool a_get_breakdown,
                        tag_stat_map_t &ao_breakdown_stats) const;
         int32_t get_stats_json(char *l_json_buf, uint32_t l_json_buf_max_len);

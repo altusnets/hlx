@@ -1489,7 +1489,7 @@ void display_status_line(settings_struct_t &a_settings)
         // -------------------------------------------------
 
         // Get stats
-        ns_hlx::total_stat_agg_t l_total;
+        ns_hlx::t_stat_t l_total;
         ns_hlx::tag_stat_map_t l_unused;
         a_settings.m_hlx_client->get_stats(l_total, false, l_unused);
 

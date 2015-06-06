@@ -42,7 +42,7 @@
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
 static void show_total_agg_stat(std::string &a_tag,
-        const ns_hlx::total_stat_agg_t &a_stat,
+        const ns_hlx::t_stat_t &a_stat,
         double a_time_elapsed_s,
         uint32_t a_max_parallel,
         bool a_color)
@@ -108,7 +108,7 @@ void stats_collector::display_results(double a_elapsed_time,
 {
 
         ns_hlx::tag_stat_map_t l_tag_stat_map;
-        ns_hlx::total_stat_agg_t l_total;
+        ns_hlx::t_stat_t l_total;
 
         // Get stats
         get_stats(l_total, a_show_breakdown_flag, l_tag_stat_map);
@@ -139,7 +139,7 @@ void stats_collector::display_results(double a_elapsed_time,
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
 static void show_total_agg_stat_legacy(std::string &a_tag,
-        const ns_hlx::total_stat_agg_t &a_stat,
+        const ns_hlx::t_stat_t &a_stat,
         std::string &a_sep,
         double a_time_elapsed_s,
         uint32_t a_max_parallel)
@@ -192,7 +192,7 @@ static void show_total_agg_stat_legacy(std::string &a_tag,
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void stats_collector::get_stats(ns_hlx::total_stat_agg_t &ao_all_stats,
+void stats_collector::get_stats(ns_hlx::t_stat_t &ao_all_stats,
                 bool a_get_breakdown,
                 ns_hlx::tag_stat_map_t &ao_breakdown_stats)
 {
@@ -272,7 +272,7 @@ void stats_collector::display_results_http_load_style(double a_elapsed_time,
 {
 
         ns_hlx::tag_stat_map_t l_tag_stat_map;
-        ns_hlx::total_stat_agg_t l_total;
+        ns_hlx::t_stat_t l_total;
 
         // Get stats
         get_stats(l_total, a_show_breakdown_flag, l_tag_stat_map);
@@ -312,7 +312,7 @@ int32_t stats_collector::get_stats_json(char *l_json_buf, uint32_t l_json_buf_ma
 {
 
         ns_hlx::tag_stat_map_t l_tag_stat_map;
-        ns_hlx::total_stat_agg_t l_total;
+        ns_hlx::t_stat_t l_total;
 
         uint64_t l_time_ms = ns_hlx::get_time_ms();
         // Get stats
@@ -396,7 +396,7 @@ void stats_collector::display_results_line_desc(bool a_color_flag)
 void stats_collector::display_results_line(bool a_color_flag)
 {
 
-        ns_hlx::total_stat_agg_t l_total;
+        ns_hlx::t_stat_t l_total;
         ns_hlx::tag_stat_map_t l_unused;
         uint64_t l_cmd_total = hlp::get()->get_num_cmds();
         uint64_t l_cmd_execd = hlp::get()->get_num_cmds_serviced();

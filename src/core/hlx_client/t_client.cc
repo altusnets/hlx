@@ -69,7 +69,7 @@ t_client::t_client(const settings_struct_t &a_settings,
                    reqlet_vector_t a_reqlet_vector):
         m_t_run_thread(),
         m_settings(),
-        m_num_reqlets(0),
+
         m_num_resolved(0),
         m_num_get(0),
         m_num_done(0),
@@ -83,6 +83,7 @@ t_client::t_client(const settings_struct_t &a_settings,
         m_summary_ssl_error_other(0),
         m_summary_ssl_protocols(),
         m_summary_ssl_ciphers(),
+
         m_nconn_pool(a_settings.m_num_parallel),
         m_stopped(false),
         m_num_fetches(-1),
@@ -155,7 +156,6 @@ t_client::t_client(const settings_struct_t &a_settings,
                 l_reqlet->set_id(i_id++);
                 m_reqlet_vector.push_back(l_reqlet);
         }
-        m_num_reqlets = m_reqlet_vector.size();
 
         // Create loop
         m_evr_loop = new evr_loop(evr_loop_file_readable_cb,

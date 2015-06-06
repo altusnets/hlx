@@ -235,7 +235,7 @@ std::string get_file_wo_ext(std::string &a_filename)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void add_stat_to_agg(total_stat_agg_t &ao_stat_agg, const req_stat_t &a_req_stat)
+void add_stat_to_agg(t_stat_t &ao_stat_agg, const req_stat_t &a_req_stat)
 {
         update_stat(ao_stat_agg.m_stat_us_connect, a_req_stat.m_tt_connect_us);
         update_stat(ao_stat_agg.m_stat_us_ssl_connect, a_req_stat.m_tt_ssl_connect_us);
@@ -258,7 +258,7 @@ void add_stat_to_agg(total_stat_agg_t &ao_stat_agg, const req_stat_t &a_req_stat
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-void add_to_total_stat_agg(total_stat_agg_t &ao_stat_agg, const total_stat_agg_t &a_add_total_stat)
+void add_to_total_stat_agg(t_stat_t &ao_stat_agg, const t_stat_t &a_add_total_stat)
 {
 
         // Stats
