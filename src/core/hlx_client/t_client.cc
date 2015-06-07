@@ -677,6 +677,14 @@ void *t_client::evr_loop_timer_completion_cb(void *a_data)
 void *t_client::evr_loop_file_error_cb(void *a_data)
 {
         //NDBG_PRINT("%sSTATUS_ERRORS%s\n", ANSI_COLOR_FG_RED, ANSI_COLOR_OFF);
+        if(!a_data)
+        {
+                //NDBG_PRINT("a_data == NULL\n");
+                return NULL;
+        }
+
+         // TODO cleanup???
+
         return NULL;
 }
 

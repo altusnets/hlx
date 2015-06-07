@@ -218,8 +218,8 @@ int32_t nconn_tcp::receive_response(void)
 
                 } while((l_bytes_read < 0) && (errno == EAGAIN));
 
-                //NDBG_PRINT("%sHOST%s: %s fd[%3d]\n", ANSI_COLOR_FG_RED, ANSI_COLOR_OFF, m_host.c_str(), m_fd);
-                //ns_hlo::mem_display((uint8_t *)(m_read_buf + m_read_buf_idx), l_bytes_read);
+                NDBG_PRINT("%sHOST%s: %s fd[%3d]\n", ANSI_COLOR_FG_RED, ANSI_COLOR_OFF, m_host.c_str(), m_fd);
+                ns_hlo::mem_display((uint8_t *)(m_read_buf + m_read_buf_idx), l_bytes_read);
 
                 // TODO Handle EOF -close connection...
                 if ((l_bytes_read <= 0) && (errno != EAGAIN))
@@ -255,9 +255,9 @@ int32_t nconn_tcp::receive_response(void)
                 // Parse result
                 // -----------------------------------------
                 size_t l_parse_status = 0;
-                //NDBG_PRINT("%sHTTP_PARSER%s: m_read_buf: %p, m_read_buf_idx: %d, l_bytes_read: %d\n",
-                //                ANSI_COLOR_BG_YELLOW, ANSI_COLOR_OFF,
-                //                m_read_buf, (int)m_read_buf_idx, (int)l_bytes_read);
+                NDBG_PRINT("%sHTTP_PARSER%s: m_read_buf: %p, m_read_buf_idx: %d, l_bytes_read: %d\n",
+                                ANSI_COLOR_BG_YELLOW, ANSI_COLOR_OFF,
+                                m_read_buf, (int)m_read_buf_idx, (int)l_bytes_read);
                 l_parse_status = http_parser_execute(&m_http_parser, &m_http_parser_settings, m_read_buf + m_read_buf_idx, l_bytes_read);
                 if(l_parse_status < (size_t)l_bytes_read)
                 {
@@ -406,7 +406,6 @@ state_top:
         // -------------------------------------------------
         case TCP_STATE_LISTENING:
         {
-
                 int l_client_fd = -1;
                 l_client_fd = accept_tcp_connection();
                 if(l_client_fd < 0)
@@ -671,12 +670,51 @@ int32_t nconn_tcp::get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t nconn_tcp::set_listening(int32_t a_val)
+int32_t nconn_tcp::set_listening(evr_loop *a_evr_loop, int32_t a_val)
 {
         m_fd = a_val;
         m_tcp_state = TCP_STATE_LISTENING;
+
+        // Add to event handler
+        if (0 != a_evr_loop->add_fd(a_val,
+                                    EVR_FILE_ATTR_MASK_WRITE|EVR_FILE_ATTR_MASK_READ|EVR_FILE_ATTR_MASK_STATUS_ERROR,
+                                    this))
+        {
+                NDBG_PRINT("Error: Couldn't add socket file descriptor\n");
+                return STATUS_ERROR;
+        }
+
         return STATUS_OK;
 }
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t nconn_tcp::set_reading(evr_loop *a_evr_loop, int a_fd)
+{
+        m_fd = a_fd;
+        m_tcp_state = TCP_STATE_READING;
+
+        // Add to event handler
+        if (0 != a_evr_loop->add_fd(m_fd,
+                                    EVR_FILE_ATTR_MASK_READ|EVR_FILE_ATTR_MASK_STATUS_ERROR,
+                                    this))
+        {
+                NDBG_PRINT("Error: Couldn't add socket file descriptor\n");
+                return STATUS_ERROR;
+        }
+
+        // -------------------------------------------
+        // Initalize the http response parser
+        // -------------------------------------------
+        m_http_parser.data = this;
+        http_parser_init(&m_http_parser, HTTP_REQUEST);
+
+        return STATUS_OK;
+}
+
 
 } // ns_hlx
 

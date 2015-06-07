@@ -940,11 +940,10 @@ int32_t nconn_ssl::get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len)
 //: \return:  TODO
 //: \param:   TODO
 //: ----------------------------------------------------------------------------
-int32_t nconn_ssl::set_listening(int32_t a_val)
+int32_t nconn_ssl::set_listening(evr_loop *a_evr_loop, int32_t a_val)
 {
-        // TODO RUN SUPER
         int32_t l_status;
-        l_status = nconn_tcp::set_listening(a_val);
+        l_status = nconn_tcp::set_listening(a_evr_loop, a_val);
         if((l_status != STATUS_OK) &&
            (l_status != m_opt_unhandled))
         {
@@ -952,6 +951,25 @@ int32_t nconn_ssl::set_listening(int32_t a_val)
         }
 
         m_ssl_state = SSL_STATE_LISTENING;
+        return STATUS_OK;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t nconn_ssl::set_reading(evr_loop *a_evr_loop, int a_fd)
+{
+        int32_t l_status;
+        l_status = nconn_tcp::set_reading(a_evr_loop, a_fd);
+        if((l_status != STATUS_OK) &&
+           (l_status != m_opt_unhandled))
+        {
+                return STATUS_ERROR;
+        }
+
+        m_ssl_state = SSL_STATE_READING;
         return STATUS_OK;
 }
 

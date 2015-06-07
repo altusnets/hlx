@@ -40,16 +40,6 @@
 //: ----------------------------------------------------------------------------
 //: Macros
 //: ----------------------------------------------------------------------------
-#define T_SERVER_CONN_CLEANUP(a_t_server, a_conn, a_reqlet, a_status, a_response, a_error) \
-        do { \
-                if(a_reqlet)\
-                        a_reqlet->set_response(a_status, a_response); \
-                if(a_t_server->m_settings.m_show_summary)\
-                        a_t_server->append_summary(a_reqlet);\
-                ++(a_t_server->m_num_done);\
-                if(a_status >= 500) {++(a_t_server->m_num_error);}\
-                a_t_server->cleanup_connection(a_conn, true, a_error); \
-        }while(0)
 
 namespace ns_hlx {
 
@@ -245,6 +235,11 @@ t_server::t_server(const settings_struct_t &a_settings):
         COPY_SETTINGS(m_num_parallel);
         COPY_SETTINGS(m_fd);
 
+        // Set save request data
+        // TODO make flag name generic request/response
+        m_settings.m_save_response = true;
+        m_settings.m_color = true;
+
         // Create loop
         m_evr_loop = new evr_loop(evr_loop_file_readable_cb,
                                   evr_loop_file_writeable_cb,
@@ -401,11 +396,15 @@ void *t_server::evr_loop_file_readable_cb(void *a_data)
 
         if(l_nconn->is_listening())
         {
+                int32_t l_fd = l_status;
                 // -----------------------------------------
                 // Make function
                 // -----------------------------------------
                 // Get connection for new fd
                 l_reqlet = new reqlet(0, 1);
+
+                NDBG_PRINT("l_t_server->m_settings.m_verbose:       %d\n", l_t_server->m_settings.m_verbose);
+                NDBG_PRINT("l_t_server->m_settings.m_save_response: %d\n", l_t_server->m_settings.m_save_response);
 
                 l_nconn = l_t_server->m_nconn_pool.get(l_reqlet,
                                                        l_t_server->m_settings);
@@ -415,10 +414,20 @@ void *t_server::evr_loop_file_readable_cb(void *a_data)
                         return NULL;
                 }
 
-                // TODO Fix!!!
-                close(l_status);
+                // Set reading mode
+                l_status = l_nconn->set_reading(l_t_server->m_evr_loop, l_fd);
+                if(STATUS_OK != l_status)
+                {
+                        return NULL;
+                }
 
-                return NULL;
+                // Run state machine???
+                l_status = l_nconn->run_state_machine(l_t_server->m_evr_loop, l_reqlet->m_host_info);
+                if((STATUS_ERROR == l_status) &&
+                   l_nconn->m_verbose)
+                {
+                        NDBG_PRINT("Error: performing run_state_machine\n");
+                }
         }
 
 #if 0
@@ -529,7 +538,18 @@ void *t_server::evr_loop_timer_completion_cb(void *a_data)
 //: ----------------------------------------------------------------------------
 void *t_server::evr_loop_file_error_cb(void *a_data)
 {
-        NDBG_PRINT("%sSTATUS_ERRORS%s\n", ANSI_COLOR_FG_RED, ANSI_COLOR_OFF);
+        NDBG_PRINT("%sSTATUS_ERRORS%s: %p\n", ANSI_COLOR_FG_RED, ANSI_COLOR_OFF, a_data);
+        if(!a_data)
+        {
+                //NDBG_PRINT("a_data == NULL\n");
+                return NULL;
+        }
+        nconn* l_nconn = static_cast<nconn*>(a_data);
+        t_server *l_t_server = g_t_server;
+
+        // Cleanup
+        l_t_server->cleanup_connection(l_nconn, true, 900);
+
         return NULL;
 }
 
@@ -620,14 +640,8 @@ void *t_server::t_run(void *a_nothing)
                                 false);
 
         // Set to listening mode
-        m_nconn->set_listening(m_settings.m_fd);
-
-        // Add to event handler
-        if (0 != m_evr_loop->add_fd(m_settings.m_fd,
-                                    EVR_FILE_ATTR_MASK_WRITE|EVR_FILE_ATTR_MASK_READ|EVR_FILE_ATTR_MASK_STATUS_ERROR,
-                                    m_nconn))
+        if(STATUS_OK != m_nconn->set_listening(m_evr_loop, m_settings.m_fd))
         {
-                NDBG_PRINT("Error: Couldn't add socket file descriptor\n");
                 return NULL;
         }
 
@@ -768,14 +782,11 @@ int32_t t_server::cleanup_connection(nconn *a_nconn, bool a_cancel_timer, int32_
 
         //NDBG_PRINT("%sADDING_BACK%s: %u\n", ANSI_COLOR_BG_GREEN, ANSI_COLOR_OFF, (uint32_t)a_nconn->get_id());
 
-        // TODO Connection teardown...
-#if 0
         // Add back to free list
         if(STATUS_OK != m_nconn_pool.release(a_nconn))
         {
                 return STATUS_ERROR;
         }
-#endif
 
         return STATUS_OK;
 }
