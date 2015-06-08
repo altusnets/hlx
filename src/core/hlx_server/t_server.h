@@ -106,6 +106,7 @@ private:
         }
 
         int32_t cleanup_connection(nconn *a_nconn, bool a_cancel_timer = true, int32_t a_status = 0);
+        int32_t get_response(nconn &ao_conn, reqlet &a_reqlet);
 
         // -------------------------------------------------
         // Private members

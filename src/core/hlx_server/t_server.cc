@@ -36,6 +36,16 @@
 //: ----------------------------------------------------------------------------
 //: Constants
 //: ----------------------------------------------------------------------------
+const char *G_HTTP_RESPONSE =
+"HTTP/1.1 200 OK\r\n"
+"Date: Sun, 07 Jun 2015 22:49:12 GMT\r\n"
+"Server: hss HTTP API Server v0.0.1\r\n"
+"Content-length: 26\r\n"
+"Content-Type: application/json\r\n"
+"\r\n"
+"[{\"xxxxxx-xxxx\":\"x.x.xx\"}]\r\n"
+"\r\n"
+"\r\n";
 
 //: ----------------------------------------------------------------------------
 //: Macros
@@ -47,169 +57,6 @@ namespace ns_hlx {
 //: Thread local global
 //: ----------------------------------------------------------------------------
 __thread t_server *g_t_server = NULL;
-
-#if 0
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int t_server::hp_on_message_begin(http_parser* a_parser)
-{
-        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
-        if(l_t_server)
-        {
-                if(l_t_server->m_settings.m_verbose)
-                {
-                        NDBG_OUTPUT("message begin\n");
-                }
-        }
-
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int t_server::hp_on_url(http_parser* a_parser, const char *a_at, size_t a_length)
-{
-        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
-        if(l_t_server)
-        {
-                if(l_t_server->m_settings.m_verbose)
-                {
-                        if(l_t_server->m_settings.m_color)
-                                NDBG_OUTPUT("url:   %s%.*s%s\n", ANSI_COLOR_FG_YELLOW, (int)a_length, a_at, ANSI_COLOR_OFF);
-                        else
-                                NDBG_OUTPUT("url:   %.*s\n", (int)a_length, a_at);
-                }
-
-                std::string l_url;
-                l_url.assign(a_at, a_length);
-                l_t_server->m_request.set_uri(l_url);
-
-        }
-
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int t_server::hp_on_header_field(http_parser* a_parser, const char *a_at, size_t a_length)
-{
-        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
-        if(l_t_server)
-        {
-                if(l_t_server->m_settings.m_verbose)
-                {
-                        if(l_t_server->m_settings.m_color)
-                                NDBG_OUTPUT("field:  %s%.*s%s\n", ANSI_COLOR_FG_BLUE, (int)a_length, a_at, ANSI_COLOR_OFF);
-                        else
-                                NDBG_OUTPUT("field:  %.*s\n", (int)a_length, a_at);
-                }
-
-                l_t_server->m_next_header.assign(a_at, a_length);
-        }
-
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int t_server::hp_on_header_value(http_parser* a_parser, const char *a_at, size_t a_length)
-{
-        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
-        if(l_t_server)
-        {
-                if(l_t_server->m_settings.m_verbose)
-                {
-                        if(l_t_server->m_settings.m_color)
-                                NDBG_OUTPUT("value:  %s%.*s%s\n", ANSI_COLOR_FG_GREEN, (int)a_length, a_at, ANSI_COLOR_OFF);
-                        else
-                                NDBG_OUTPUT("value:  %.*s\n", (int)a_length, a_at);
-                }
-
-                std::string l_val;
-                l_val.assign(a_at, a_length);
-                l_t_server->m_request.set_header(l_t_server->m_next_header, l_val);
-
-        }
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int t_server::hp_on_headers_complete(http_parser* a_parser)
-{
-        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
-        if(l_t_server)
-        {
-                if(l_t_server->m_settings.m_verbose)
-                {
-                        NDBG_OUTPUT("headers_complete\n");
-                }
-        }
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int t_server::hp_on_body(http_parser* a_parser, const char *a_at, size_t a_length)
-{
-        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
-        if(l_t_server)
-        {
-                if(l_t_server->m_settings.m_verbose)
-                {
-                        if(l_t_server->m_settings.m_color)
-                                NDBG_OUTPUT("body:  %s%.*s%s\n", ANSI_COLOR_FG_YELLOW, (int)a_length, a_at, ANSI_COLOR_OFF);
-                        else
-                                NDBG_OUTPUT("body:  %.*s\n", (int)a_length, a_at);
-                }
-
-                l_t_server->m_body.append(a_at, a_length);
-
-        }
-        return 0;
-}
-
-//: ----------------------------------------------------------------------------
-//: \details: TODO
-//: \return:  TODO
-//: \param:   TODO
-//: ----------------------------------------------------------------------------
-int t_server::hp_on_message_complete(http_parser* a_parser)
-{
-        t_server *l_t_server = static_cast <t_server *>(a_parser->data);
-        if(l_t_server)
-        {
-                if(l_t_server->m_settings.m_verbose)
-                {
-                        NDBG_OUTPUT("message complete\n");
-                }
-
-                // we outtie
-                l_t_server->m_request.set_body(l_t_server->m_body);
-                l_t_server->m_cur_msg_complete = true;
-        }
-
-        return 0;
-}
-#endif
 
 //: ----------------------------------------------------------------------------
 //: \details: TODO
@@ -427,6 +274,26 @@ void *t_server::evr_loop_file_readable_cb(void *a_data)
                    l_nconn->m_verbose)
                 {
                         NDBG_PRINT("Error: performing run_state_machine\n");
+                }
+
+                // Send response...
+                if(l_nconn->is_done())
+                {
+                        // Create response
+                        l_status = l_t_server->get_response(*l_nconn, *l_reqlet);
+                        if(STATUS_OK != l_status)
+                        {
+                                // TODO 500 response and cleanup
+                                l_t_server->cleanup_connection(l_nconn, true, 500);
+                        }
+
+                        // Set to writing and run state machine
+                        l_status = l_nconn->run_state_machine(l_t_server->m_evr_loop, l_reqlet->m_host_info);
+                        if((STATUS_ERROR == l_status) &&
+                           l_nconn->m_verbose)
+                        {
+                                NDBG_PRINT("Error: performing run_state_machine\n");
+                        }
                 }
         }
 
@@ -787,6 +654,101 @@ int32_t t_server::cleanup_connection(nconn *a_nconn, bool a_cancel_timer, int32_
         {
                 return STATUS_ERROR;
         }
+
+        return STATUS_OK;
+}
+
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t t_client::get_response(nconn &ao_conn,
+                               reqlet &a_reqlet)
+{
+
+#if 0
+        // Get client
+        char *l_req_buf = NULL;
+        uint32_t l_req_buf_len = 0;
+        uint32_t l_max_buf_len = nconn_tcp::m_max_req_buf;
+
+        if(!a_reqlet.m_multipath)
+        {
+                GET_NCONN_OPT(ao_conn, nconn_tcp::OPT_TCP_REQ_BUF_LEN, NULL, &l_req_buf_len);
+                if(l_req_buf_len)
+                {
+                        //NDBG_PRINT("Bailing already set to: %u\n", l_req_buf_len);
+                        return STATUS_OK;
+                }
+        }
+
+
+        GET_NCONN_OPT(ao_conn, nconn_tcp::OPT_TCP_REQ_BUF, (void **)(&l_req_buf), &l_req_buf_len);
+
+        // -------------------------------------------
+        // Request.
+        // -------------------------------------------
+        const std::string &l_path_ref = a_reqlet.get_path(NULL);
+        //NDBG_PRINT("HOST: %s PATH: %s\n", a_reqlet.m_url.m_host.c_str(), l_path_ref.c_str());
+        if(l_path_ref.length())
+        {
+                l_req_buf_len = snprintf(l_req_buf, l_max_buf_len,
+                                "%s %.500s HTTP/1.1\r\n", m_settings.m_verb.c_str(), l_path_ref.c_str());
+        } else {
+                l_req_buf_len = snprintf(l_req_buf, l_max_buf_len,
+                                "%s / HTTP/1.1\r\n", m_settings.m_verb.c_str());
+        }
+
+        // -------------------------------------------
+        // Add repo headers
+        // -------------------------------------------
+        bool l_specd_host = false;
+
+        // Loop over reqlet map
+        for(header_map_t::const_iterator i_header = m_settings.m_header_map.begin();
+                        i_header != m_settings.m_header_map.end();
+                        ++i_header)
+        {
+                if(!i_header->first.empty() && !i_header->second.empty())
+                {
+                        //printf("Adding HEADER: %s: %s\n", i_header->first.c_str(), i_header->second.c_str());
+                        l_req_buf_len += snprintf(l_req_buf + l_req_buf_len, l_max_buf_len - l_req_buf_len,
+                                        "%s: %s\r\n", i_header->first.c_str(), i_header->second.c_str());
+
+                        if (strcasecmp(i_header->first.c_str(), "host") == 0)
+                        {
+                                l_specd_host = true;
+                        }
+                }
+        }
+
+        // -------------------------------------------
+        // Default Host if unspecified
+        // -------------------------------------------
+        if (!l_specd_host)
+        {
+                l_req_buf_len += snprintf(l_req_buf + l_req_buf_len, l_max_buf_len - l_req_buf_len,
+                                "Host: %s\r\n", a_reqlet.m_url.m_host.c_str());
+        }
+
+        // -------------------------------------------
+        // End of request terminator...
+        // -------------------------------------------
+        l_req_buf_len += snprintf(l_req_buf + l_req_buf_len, l_max_buf_len - l_req_buf_len, "\r\n");
+
+        // -------------------------------------------
+        // body
+        // -------------------------------------------
+        if(m_settings.m_req_body)
+        {
+                memcpy(l_req_buf + l_req_buf_len, m_settings.m_req_body, m_settings.m_req_body_len);
+                l_req_buf_len += m_settings.m_req_body_len;
+        }
+
+        // Set len
+        SET_NCONN_OPT(ao_conn, nconn_tcp::OPT_TCP_REQ_BUF_LEN, NULL, l_req_buf_len);
+#endif
 
         return STATUS_OK;
 }

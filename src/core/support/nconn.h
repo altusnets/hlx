@@ -191,6 +191,7 @@ public:
         virtual int32_t get_opt(uint32_t a_opt, void **a_buf, uint32_t *a_len) = 0;
         virtual int32_t set_listening(evr_loop *a_evr_loop, int32_t a_val) = 0;
         virtual int32_t set_reading(evr_loop *a_evr_loop, int a_fd) = 0;
+        virtual int32_t set_writing(evr_loop *a_evr_loop, int a_fd) = 0;
         virtual bool is_listening(void) = 0;
 
         virtual void set_state_done(void) = 0;

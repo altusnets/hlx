@@ -715,6 +715,29 @@ int32_t nconn_tcp::set_reading(evr_loop *a_evr_loop, int a_fd)
         return STATUS_OK;
 }
 
+//: ----------------------------------------------------------------------------
+//: \details: TODO
+//: \return:  TODO
+//: \param:   TODO
+//: ----------------------------------------------------------------------------
+int32_t nconn_tcp::set_writing(evr_loop *a_evr_loop, int a_fd)
+{
+        m_fd = a_fd;
+        m_tcp_state = TCP_STATE_WRITING;
+
+        // Add to event handler
+        if (0 != a_evr_loop->mod_fd(m_fd,
+                                    EVR_FILE_ATTR_MASK_WRITE|EVR_FILE_ATTR_MASK_STATUS_ERROR,
+                                    this))
+        {
+                NDBG_PRINT("Error: Couldn't add socket file descriptor\n");
+                return STATUS_ERROR;
+        }
+
+        return STATUS_OK;
+
+}
+
 
 } // ns_hlx
 
