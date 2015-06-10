@@ -206,12 +206,7 @@ int32_t evr_loop::run(void)
         // -------------------------------------------
         // Service them
         // -------------------------------------------
-        for (int i_event = 0;
-                        (i_event < l_num_events) &&
-                        (!m_stopped)
-                        //&&
-                        //((m_run_time_s == -1) || (m_run_time_s > (get_time_s() - m_start_time_s)))
-                        ; ++i_event)
+        for (int i_event = 0; (i_event < l_num_events) && (!m_stopped); ++i_event)
         {
 
                 // -------------------------------------------
